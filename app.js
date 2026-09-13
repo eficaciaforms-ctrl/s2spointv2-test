@@ -358,6 +358,7 @@ function doLogin() {
   APP_FECHA  = f;
   APP_IS_SUP = esSup(u);
   setupPing();
+  verificarUbicacion();
 
   var dias = ['Domingo', 'Lunes', 'Martes', 'Miercoles', 'Jueves', 'Viernes', 'Sabado'];
   var dt = new Date(f + 'T12:00:00');
@@ -1006,7 +1007,7 @@ function enviarStock() {
 // ═══════════════════════════════════════════════════════════
 // MODULO: MARCACION DE INICIO / FIN (foto + GPS + hora servidor)
 // ═══════════════════════════════════════════════════════════
-var MC_TIPO='INICIO', MC_STREAM=null, MC_RAW=null, MC_PHOTO=null;
+var MC_TIPO='INICIO', MC_MODO='VENDEDOR', MC_STREAM=null, MC_RAW=null, MC_PHOTO=null;
 var MC_LAT='', MC_LNG='', MC_ACC='', MC_UBIC='';
 var MC_SRV_TS=null, MC_EQ_TS=null, MC_DELTA=0, MC_ALTERADA=false, MC_SRV_OK=false;
 var MC_FECHA='', MC_HORA='', MC_BAT='';
@@ -1030,12 +1031,18 @@ function mcFlushPend(){
 function iniciarMarcacion(tipo){
   MC_TIPO = (tipo==='FIN') ? 'FIN' : 'INICIO';
   MC_RAW=null; MC_PHOTO=null; MC_LAT=''; MC_LNG=''; MC_UBIC=''; MC_SRV_OK=false; MC_ALTERADA=false;
+  if(MC_TIPO==='INICIO'){
+    // Inicio en 2 etapas: sola (esperando) o con vendedor
+    MC_MODO = confirm('¿El vendedor ya está contigo?\n\n• Aceptar = Sí, inicio CON vendedor\n• Cancelar = Aún no, inicio SOLA (esperando al vendedor)') ? 'VENDEDOR' : 'SOLA';
+  } else {
+    MC_MODO = 'VENDEDOR';
+  }
   G('s-marca-cam');
 }
 
 function initMarcaCam(){
   mcFlushPend();
-  var t=ge('mc-cam-ttl'); if(t) t.textContent = (MC_TIPO==='FIN'?'Marcar fin de ruta':'Marcar inicio de ruta');
+  var t=ge('mc-cam-ttl'); if(t) t.textContent = (MC_TIPO==='FIN'?'Marcar fin de ruta':(MC_MODO==='SOLA'?'Inicio (esperando vendedor)':'Marcar inicio de ruta'));
   setMC('mc-cam-loc','Obteniendo ubicación…');
   setMC('mc-cam-hora','Sincronizando hora…');
   capturarContexto();
@@ -1149,7 +1156,8 @@ function repetirMarca(){ G('s-marca-cam'); }
 function usarFotoMarca(){ G('s-marca-datos'); }
 
 function renderMarcaDatos(){
-  var t=ge('mc-datos-ttl'); if(t) t.textContent=(MC_TIPO==='FIN'?'Datos de fin':'Datos de inicio');
+  var soloEspera = (MC_TIPO==='INICIO' && MC_MODO==='SOLA');
+  var t=ge('mc-datos-ttl'); if(t) t.textContent=(MC_TIPO==='FIN'?'Datos de fin':(soloEspera?'Inicio (esperando vendedor)':'Datos de inicio'));
   // Distribuidoras del usuario
   var sel=ge('mc-dist');
   if(sel){
@@ -1158,14 +1166,12 @@ function renderMarcaDatos(){
     for(var i=0;i<ds.length;i++) h+='<option value="'+ds[i]+'">'+ds[i]+'</option>';
     sel.innerHTML=h;
   }
-  var vv=ge('mc-vend'); if(vv) vv.value='';
-  // Al marcar FIN, precargar la distribuidora y vendedor con los que marcó el INICIO
-  if(MC_TIPO==='FIN'){
-    try{
-      var last=JSON.parse(localStorage.getItem('s2s_mc_last_'+APP_USER)||'null');
-      if(last){ if(sel && last.dist) sel.value=last.dist; if(vv && last.vend) vv.value=last.vend; }
-    }catch(e){}
-  }
+  var vv=ge('mc-vend'); if(vv){ vv.value=''; vv.placeholder = soloEspera ? 'Opcional — aún esperando al vendedor' : 'Nombre del vendedor'; }
+  // Precargar distribuidora y vendedor de la última marcación del día (preescrito, editable)
+  try{
+    var last=JSON.parse(localStorage.getItem('s2s_mc_last_'+APP_USER)||'null');
+    if(last && last.fecha===MC_FECHA){ if(sel && last.dist) sel.value=last.dist; if(vv && last.vend) vv.value=last.vend; }
+  }catch(e){}
   // Resumen capturado
   setMC('mc-r-hora', mcHora(MC_HORA));
   setMC('mc-r-loc', MC_UBIC || (MC_LAT+', '+MC_LNG) || '—');
@@ -1183,22 +1189,22 @@ function compartirMarca(){
   var sel=ge('mc-dist'), vv=ge('mc-vend');
   MC_DIST = sel?sel.value:''; MC_VEND = vv?vv.value.trim().toUpperCase():'';
   if(!MC_DIST){ alert('Selecciona la distribuidora'); return; }
-  if(!MC_VEND){ alert('Ingresa el nombre del vendedor'); return; }
+  var soloEspera = (MC_TIPO==='INICIO' && MC_MODO==='SOLA');
+  if(!MC_VEND && !soloEspera){ alert('Ingresa el nombre del vendedor'); return; }
   if(!MC_PHOTO){ alert('Falta la foto'); return; }
-  var tipoTxt=(MC_TIPO==='FIN')?'🏁 FIN DE DÍA':'🟢 INICIO DE DÍA';
+  var tipoTxt = (MC_TIPO==='FIN') ? '🏁 FIN DE DÍA'
+              : (soloEspera ? '🟡 INICIO DE RUTA (esperando vendedor)' : '🟢 INICIO DE RUTA (con vendedor)');
   var hLbl=(MC_TIPO==='FIN')?'Hora de fin':'Hora de inicio';
   var txt = tipoTxt+' — '+mcFecha(MC_FECHA)+'\n'+
             '👤 '+APP_USER+'\n'+
             '🚚 Distribuidora: '+MC_DIST+'\n'+
-            '🧑‍💼 Vendedor: '+MC_VEND+'\n'+
+            '🧑‍💼 Vendedor: '+(MC_VEND || '(por confirmar)')+'\n'+
             '🕐 '+hLbl+': '+mcHora(MC_HORA)+'\n'+
             '📍 Ubicación: '+(MC_UBIC || (MC_LAT+', '+MC_LNG))+'\n'+
             '🌐 https://maps.google.com/?q='+MC_LAT+','+MC_LNG;
   guardarMarcacion(String(Date.now()));
-  // Recordar dist/vendedor del INICIO para precargarlos al marcar el FIN
-  if(MC_TIPO==='INICIO'){
-    try{ localStorage.setItem('s2s_mc_last_'+APP_USER, JSON.stringify({fecha:MC_FECHA, dist:MC_DIST, vend:MC_VEND})); }catch(e){}
-  }
+  // Recordar distribuidora/vendedor para precargarlos en la siguiente marcación del día
+  try{ localStorage.setItem('s2s_mc_last_'+APP_USER, JSON.stringify({fecha:MC_FECHA, dist:MC_DIST, vend:MC_VEND})); }catch(e){}
   compartirNativo(txt);
 }
 
@@ -1251,7 +1257,7 @@ function setupPing(){
   if(_pingSetup) return; _pingSetup=true;
   // Al volver a ver el app (desbloquear / cambiar de app y volver)
   document.addEventListener('visibilitychange', function(){
-    if(document.visibilityState==='visible') pingUbicacion(false);
+    if(document.visibilityState==='visible'){ pingUbicacion(false); verificarUbicacion(); }
   });
   window.addEventListener('focus', function(){ pingUbicacion(false); });
   // Cada 4 minutos mientras el app este visible
@@ -1268,6 +1274,8 @@ function setupPing(){
 var _navSetup=false;
 function setupNavGuard(){
   if(_navSetup) return; _navSetup=true;
+  // En la APK NO se usa el guardián: estorba al compartir por WhatsApp.
+  if(esNativo()) return;
   try{ history.pushState({s2s:1}, ''); }catch(e){}
   window.addEventListener('popstate', function(){
     // Si no está en el inicio, el botón atrás regresa al inicio (no cierra)
@@ -1289,6 +1297,73 @@ function setupNavGuard(){
   });
 }
 
+// ═══════════════════════════════════════════════════════════
+// RASTREO EN SEGUNDO PLANO — SOLO en la APK nativa (Capacitor)
+// En el navegador/PWA no hace nada (usa el ping normal con app abierto).
+// Identifica por APP_USER · máximo cada 5 min · solo de 7am a 6pm.
+// ═══════════════════════════════════════════════════════════
+var _bgWatcher=null, _bgLastPost=0;
+
+// Muestra/oculta la pantalla de bloqueo por permiso de ubicación
+function mostrarBloqueoGPS(){ var e=document.getElementById('s-gps-block'); if(e) e.style.display='flex'; }
+function ocultarBloqueoGPS(){ var e=document.getElementById('s-gps-block'); if(e) e.style.display='none'; }
+function esNativo(){ return !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()); }
+
+// Abre los ajustes del sistema para que active "Permitir siempre"
+function abrirAjustesUbicacion(){
+  try{
+    var BG=window.Capacitor.Plugins && window.Capacitor.Plugins.BackgroundGeolocation;
+    if(BG && BG.openSettings){ BG.openSettings(); return; }
+  }catch(e){}
+  verificarUbicacion();
+}
+
+// Verifica el permiso; si falta, bloquea; si está, arranca el rastreo. Solo aplica en la APK.
+function verificarUbicacion(){
+  if(!esNativo()){ ocultarBloqueoGPS(); return; } // en navegador no se bloquea
+  try{
+    var BG=window.Capacitor.Plugins && window.Capacitor.Plugins.BackgroundGeolocation;
+    if(!BG){ ocultarBloqueoGPS(); return; }
+    iniciarRastreoNativo();
+  }catch(e){ ocultarBloqueoGPS(); }
+}
+
+function iniciarRastreoNativo(){
+  try{
+    if(!esNativo()) return;
+    var BG = window.Capacitor.Plugins && window.Capacitor.Plugins.BackgroundGeolocation;
+    if(!BG) return;
+    if(_bgWatcher){ ocultarBloqueoGPS(); return; }
+    BG.addWatcher({
+      backgroundTitle: 'S2S Point',
+      backgroundMessage: 'Registrando tu ubicación durante la ruta',
+      requestPermissions: true,
+      stale: false,
+      distanceFilter: 40
+    }, function(location, error){
+      if(error){
+        // Sin permiso (o "solo mientras se usa" sin background): bloquear el uso
+        if(error.code === 'NOT_AUTHORIZED'){ mostrarBloqueoGPS(); }
+        return;
+      }
+      ocultarBloqueoGPS();  // hay ubicación → permiso concedido
+      if(!location) return;
+      var h = new Date().getHours();
+      if(h < 7 || h >= 18) return;
+      var now = Date.now();
+      if(now - _bgLastPost < 5*60*1000) return;
+      _bgLastPost = now;
+      var bat = (location.battery && typeof location.battery.level==='number') ? Math.round(location.battery.level*100)+'%' : '';
+      gasPost({ accion:'PING_UBICACION', usuario:APP_USER,
+                lat:location.latitude, lng:location.longitude,
+                precision:Math.round(location.accuracy||0), bateria:bat }, null);
+    }).then(function(id){ _bgWatcher=id; }).catch(function(){ mostrarBloqueoGPS(); });
+  }catch(e){}
+}
+function detenerRastreoNativo(){
+  try{ var BG=window.Capacitor&&Capacitor.Plugins&&Capacitor.Plugins.BackgroundGeolocation;
+       if(BG&&_bgWatcher){ BG.removeWatcher({id:_bgWatcher}); _bgWatcher=null; } }catch(e){}
+}
 function pingUbicacion(force){
   if(!APP_USER || !navigator.onLine || !navigator.geolocation) return;
   var now=Date.now();
