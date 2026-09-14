@@ -328,6 +328,10 @@ html,body{height:100%;overflow:hidden;background:var(--dark);font-family:-apple-
 .man-step-ico{font-size:20px}
 .man-step-ttl{font-size:13px;font-weight:600;color:var(--text)}
 .man-step-sub{font-size:12px;color:var(--t3);margin-top:1px}
+
+.alk-b{flex:1;height:34px;border:1px solid var(--border);border-radius:9px;background:var(--card);color:var(--text);font-size:12px;font-weight:700;font-family:inherit;cursor:pointer}
+.alk-b.alk-q{background:#7C2D12;color:#fff;border-color:#7C2D12}
+.alk-b.alk-p{background:#B45309;color:#fff;border-color:#B45309}
 </style>
 </head>
 <body>
@@ -532,7 +536,7 @@ html,body{height:100%;overflow:hidden;background:var(--dark);font-family:-apple-
         <div class="abt-ico">🏁</div><span class="abt-lbl">Marcar fin de ruta</span><span class="abt-arr">›</span>
       </button>
       <button class="abt" type="button" style="background:#7C3AED;color:#fff" onclick="G('s-stock')">
-        <div class="abt-ico">📦</div><span class="abt-lbl">Registro de Stock Distribuidoras</span><span class="abt-arr">›</span>
+        <div class="abt-ico">⚠️</div><span class="abt-lbl">Alertas Stock Distribuidora</span><span class="abt-arr">›</span>
       </button>
       <button class="abt" type="button" style="background:#334155;color:#fff" onclick="G('s-historial')">
         <div class="abt-ico">🗂</div><span class="abt-lbl">Historial de pedidos de hoy</span><span class="abt-arr">›</span>
@@ -798,7 +802,7 @@ html,body{height:100%;overflow:hidden;background:var(--dark);font-family:-apple-
 <div id="s-stock" class="scr">
   <div class="pg-hdr">
     <button class="pg-back" type="button" onclick="G('s-home')">‹</button>
-    <div><div class="pg-title">Stock Distribuidoras</div><div class="pg-sub" id="stk-sub"></div></div>
+    <div><div class="pg-title">Alertas Stock Distribuidora</div><div class="pg-sub" id="stk-sub"></div></div>
   </div>
   <div class="body">
     <div id="stk-gate" style="display:none">
@@ -816,7 +820,7 @@ html,body{height:100%;overflow:hidden;background:var(--dark);font-family:-apple-
         </div>
       </div>
       <div id="stk-search-wrap" class="sec" style="display:none">
-        <div class="sec-hdr"><div class="sec-ico ic-green">📦</div><div><div class="sec-ttl">Stock por SKU</div><div class="sec-sub" id="stk-dist-sel">—</div></div></div>
+        <div class="sec-hdr"><div class="sec-ico ic-green">📦</div><div><div class="sec-ttl">Reporta quiebre o prequiebre</div><div class="sec-sub" id="stk-dist-sel">—</div></div></div>
         <div class="sec-body">
           <div class="fld srch-wrap">
             <span class="srch-ico">🔍</span>
@@ -832,7 +836,7 @@ html,body{height:100%;overflow:hidden;background:var(--dark);font-family:-apple-
           </div>
         </div>
       </div>
-      <button class="btn btn-dark" type="button" style="margin-bottom:16px" id="stk-btn-rev" onclick="revisarStock()" disabled>👁 Revisar y reportar stock</button>
+      <button class="btn btn-dark" type="button" style="margin-bottom:16px" id="stk-btn-rev" onclick="revisarStock()" disabled>👁 Revisar y enviar alertas</button>
     </div>
   </div>
 </div>

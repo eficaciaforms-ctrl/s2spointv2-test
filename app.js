@@ -816,8 +816,8 @@ function esSabado(f) {
   try { return new Date((f || APP_FECHA) + 'T12:00:00').getDay() === 6; }
   catch (e) { return false; }
 }
-// Habilitado los sabados para todos; los supervisores lo tienen siempre disponible
-function stockHabilitado() { return esSup(APP_USER) || esSabado(APP_FECHA); }
+// Alertas de stock: disponibles cualquier día (un quiebre puede pasar en cualquier momento)
+function stockHabilitado() { return true; }
 
 // Distribuidoras del usuario: promotor -> las suyas; supervisor -> union de su equipo
 function distsStock() {
@@ -862,8 +862,18 @@ function initStock() {
   }
   if (gate) gate.style.display = 'none';
   if (body) body.style.display = 'block';
+  // Precargar la distribuidora del inicio de ruta (editable: puede tocar otra)
+  try {
+    var last = JSON.parse(localStorage.getItem('s2s_mc_last_' + APP_USER) || 'null');
+    if (last && last.dist && distsStock().indexOf(last.dist) >= 0) STK_DIST = last.dist;
+  } catch (e) {}
   renderStockDists();
-  var wrap = ge('stk-search-wrap'); if (wrap) wrap.style.display = 'none';
+  if (STK_DIST) {
+    var w2 = ge('stk-search-wrap'); if (w2) w2.style.display = 'block';
+    var l2 = ge('stk-dist-sel'); if (l2) l2.textContent = STK_DIST;
+  } else {
+    var wrap = ge('stk-search-wrap'); if (wrap) wrap.style.display = 'none';
+  }
   var sinp = ge('stk-sku-inp'); if (sinp) sinp.value = '';
   var sdrop = ge('stk-sku-drop'); if (sdrop) sdrop.style.display = 'none';
   renderStock();
@@ -915,7 +925,7 @@ function buscarStockSKU(q) {
 
 function addStockSKU(idx) {
   var p = _stkHits[idx]; if (!p) return;
-  STK_ITEMS.push({e: p.e, n: p.n, m: p.m, c: p.c, t: p.t, qty: 0});
+  STK_ITEMS.push({e: p.e, n: p.n, m: p.m, c: p.c, t: p.t, qty: 0, estado: 'quiebre'});
   var inp = ge('stk-sku-inp'); if (inp) inp.value = '';
   var dr = ge('stk-sku-drop'); if (dr) dr.style.display = 'none';
   renderStock();
@@ -937,14 +947,18 @@ function renderStock() {
     var html = '';
     for (var i = 0; i < STK_ITEMS.length; i++) {
       var p = STK_ITEMS[i];
-      var q0 = (p.qty === 0);
+      var est = p.estado || 'quiebre';
       html += '<tr>';
-      html += '<td class="ped-nm">' + p.n + '<div style="font-size:11px;color:var(--t2)">' + p.m + (q0 ? ' \u00b7 <span style="color:#DC2626;font-weight:700">quiebre</span>' : '') + '</div></td>';
-      html += '<td><div class="qty-row">';
-      html += '<button class="qbtn" onclick="chgStkQ(' + i + ',-1)">\u2212</button>';
-      html += '<input class="qty-inp" value="' + p.qty + '" onchange="setStkQ(' + i + ',this.value)" inputmode="numeric"/>';
-      html += '<button class="qbtn" onclick="chgStkQ(' + i + ',1)">+</button>';
-      html += '</div></td>';
+      html += '<td class="ped-nm">' + p.n + '<div style="font-size:11px;color:var(--t2)">' + p.m + '</div></td>';
+      html += '<td>';
+      html += '<div style="display:flex;gap:6px' + (est==='pre'?';margin-bottom:6px':'') + '">';
+      html += '<button type="button" class="alk-b' + (est==='quiebre'?' alk-q':'') + '" onclick="setStkEstado(' + i + ',\'quiebre\')">Quiebre</button>';
+      html += '<button type="button" class="alk-b' + (est==='pre'?' alk-p':'') + '" onclick="setStkEstado(' + i + ',\'pre\')">Prequiebre</button>';
+      html += '</div>';
+      if (est === 'pre') {
+        html += '<div class="qty-row" style="justify-content:flex-start"><span style="font-size:11px;color:var(--t2);margin-right:6px">Quedan:</span><button class="qbtn" onclick="chgStkQ(' + i + ',-1)">\u2212</button><input class="qty-inp" value="' + p.qty + '" onchange="setStkQ(' + i + ',this.value)" inputmode="numeric"/><button class="qbtn" onclick="chgStkQ(' + i + ',1)">+</button></div>';
+      }
+      html += '</td>';
       html += '<td><button class="del-btn" onclick="remStkSKU(' + i + ')">\ud83d\uddd1</button></td>';
       html += '</tr>';
     }
@@ -952,6 +966,15 @@ function renderStock() {
   }
   var c = ge('stk-cnt'); if (c) c.textContent = STK_ITEMS.length + ' SKU(s)';
   var b = ge('stk-btn-rev'); if (b) b.disabled = false;
+}
+
+// Cambiar estado de alerta de un SKU: quiebre (0 und) o prequiebre (indica unidades)
+function setStkEstado(i, est) {
+  if (!STK_ITEMS[i]) return;
+  STK_ITEMS[i].estado = est;
+  if (est === 'quiebre') STK_ITEMS[i].qty = 0;
+  else if (!(STK_ITEMS[i].qty > 0)) STK_ITEMS[i].qty = 1;
+  renderStock();
 }
 
 // Unidades pueden ser 0 (0 = quiebre, dato valido)
@@ -997,7 +1020,7 @@ function enviarStock() {
     var p = loadStkPend();
     for (var i = 0; i < p.length; i++) if (p[i].id === id) p[i].estado = ok ? 'enviado' : 'pendiente';
     saveStkPend(p);
-    if (ok) alert('\u2705 Stock reportado: ' + nSku + ' SKU(s) en ' + dist + '.');
+    if (ok) alert('\u2705 Alerta enviada: ' + nSku + ' SKU(s) en ' + dist + '.');
     else    alert('\u26a0\ufe0f Sin conexion. El reporte quedo guardado y se enviara al reconectar.');
     STK_DIST = null; STK_ITEMS = [];
     G('s-home');
