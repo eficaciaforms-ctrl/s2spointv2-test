@@ -331,6 +331,56 @@ html,body{height:100%;overflow:hidden;background:var(--dark);font-family:-apple-
 </style>
 </head>
 <body>
+<!-- ══════ PANTALLA DE ENTRADA ANIMADA (Aspery) ══════ -->
+<div id="asp-splash" style="position:fixed;inset:0;z-index:100000;background:#051D3A;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;transition:opacity .5s ease">
+  <div class="asp-glow"></div>
+  <div class="asp-flash"></div>
+  <div style="position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center">
+    <div style="position:relative;width:188px;height:104px">
+      <span class="asp-sol asp-s1">S/</span><span class="asp-sol asp-s2">S/</span>
+      <svg width="188" height="104" viewBox="0 0 200 110" style="overflow:visible">
+        <path class="asp-line" d="M18 92 L64 58 L96 76 L172 22"/>
+      </svg>
+    </div>
+    <div class="asp-name">Aspery</div>
+    <div class="asp-sub">Registro de ventas en tiempo real</div>
+  </div>
+  <div class="asp-dots"><span></span><span></span><span></span></div>
+  <div class="asp-foot">Aplicación desarrollada por <b>SPG</b></div>
+</div>
+<style>
+  .asp-glow{position:absolute;top:40%;left:50%;transform:translate(-50%,-50%);width:300px;height:300px;background:radial-gradient(circle,rgba(14,165,249,.20),transparent 68%);border-radius:50%;animation:aspGlow 2.8s ease-in-out infinite}
+  @keyframes aspGlow{0%,100%{opacity:.45;transform:translate(-50%,-50%) scale(.85)}50%{opacity:1;transform:translate(-50%,-50%) scale(1.15)}}
+  .asp-flash{position:absolute;top:29%;left:74%;width:8px;height:8px;border-radius:50%;background:#fff;transform:translate(-50%,-50%);opacity:0;animation:aspFlash .6s ease-out 1.32s}
+  @keyframes aspFlash{0%{opacity:.85;box-shadow:0 0 0 0 rgba(14,165,249,.65)}100%{opacity:0;box-shadow:0 0 0 80px rgba(14,165,249,0)}}
+  .asp-line{fill:none;stroke:#0EA5F9;stroke-width:14;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:400;stroke-dashoffset:400;animation:aspDraw 1.35s cubic-bezier(.25,.7,.25,1) forwards}
+  @keyframes aspDraw{to{stroke-dashoffset:0}}
+  .asp-sol{position:absolute;font-weight:800;color:#0EA5F9;opacity:0;font-family:-apple-system,'Segoe UI',sans-serif}
+  .asp-s1{font-size:15px;top:32%;left:34%;animation:aspFloat 2s ease-out .7s forwards}
+  .asp-s2{font-size:19px;top:24%;left:66%;animation:aspFloat 2s ease-out 1.05s forwards}
+  @keyframes aspFloat{0%{opacity:0;transform:translateY(14px)}45%{opacity:.5}100%{opacity:0;transform:translateY(-20px)}}
+  .asp-name{font-size:40px;font-weight:800;color:#fff;letter-spacing:-1.2px;opacity:0;transform:translateY(16px) scale(.94);animation:aspRise .6s cubic-bezier(.34,1.4,.5,1) 1.15s forwards;font-family:-apple-system,'Segoe UI',sans-serif}
+  .asp-sub{font-size:12.5px;color:#7Fb4d8;margin-top:3px;opacity:0;animation:aspFade .55s ease-out 1.55s forwards;font-family:-apple-system,'Segoe UI',sans-serif}
+  @keyframes aspRise{to{opacity:1;transform:translateY(0) scale(1)}}
+  @keyframes aspFade{to{opacity:1}}
+  .asp-dots{position:absolute;bottom:62px;left:50%;transform:translateX(-50%);display:flex;gap:6px;opacity:0;animation:aspFade .4s ease-out 1.8s forwards}
+  .asp-dots span{width:7px;height:7px;border-radius:50%;background:#0EA5F9;animation:aspPulse 1.1s ease-in-out infinite}
+  .asp-dots span:nth-child(2){animation-delay:.15s}.asp-dots span:nth-child(3){animation-delay:.3s}
+  @keyframes aspPulse{0%,100%{opacity:.3;transform:scale(.8)}50%{opacity:1;transform:scale(1.25)}}
+  .asp-foot{position:absolute;bottom:26px;left:0;right:0;text-align:center;font-size:11px;color:#5b83a6;opacity:0;animation:aspFade .7s ease-out 1.9s forwards;font-family:-apple-system,'Segoe UI',sans-serif}
+  .asp-foot b{color:#8fb9dc;font-weight:700}
+  #asp-splash.asp-hide{opacity:0;pointer-events:none}
+</style>
+<script>
+  // Ocultar el splash tras ~2.5s y quitarlo del DOM
+  window.addEventListener('load', function(){
+    setTimeout(function(){
+      var sp=document.getElementById('asp-splash');
+      if(sp){ sp.classList.add('asp-hide'); setTimeout(function(){ if(sp&&sp.parentNode) sp.parentNode.removeChild(sp); }, 600); }
+    }, 2500);
+  });
+</script>
+
 <div id="banner-update">
   <p>📦 Nueva version disponible</p>
   <button type="button" onclick="aplicarActualizacion()">Actualizar</button>
@@ -340,6 +390,15 @@ html,body{height:100%;overflow:hidden;background:var(--dark);font-family:-apple-
 <div id="app">
 
 <!-- ══════ LOGIN ══════ -->
+<div id="s-gps-block" style="display:none;position:fixed;inset:0;z-index:9999;background:linear-gradient(165deg,#7C2D12,#0F172A);color:#fff;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:34px 26px">
+  <div style="font-size:56px;margin-bottom:10px">📍</div>
+  <div style="font-size:22px;font-weight:800;margin-bottom:10px">Activa tu ubicación</div>
+  <div style="font-size:14px;line-height:1.55;color:#FED7AA;max-width:340px">Para usar S2S Point necesitas permitir el acceso a tu ubicación en modo <b style="color:#fff">"Permitir siempre"</b>. Es obligatorio para registrar tu ruta.</div>
+  <button type="button" onclick="abrirAjustesUbicacion()" style="margin-top:24px;background:#F97316;color:#fff;border:none;border-radius:14px;padding:15px 26px;font-size:15px;font-weight:700;cursor:pointer;width:100%;max-width:320px">Activar ubicación</button>
+  <button type="button" onclick="verificarUbicacion()" style="margin-top:12px;background:transparent;color:#FED7AA;border:none;font-size:13px;cursor:pointer;text-decoration:underline">Ya la activé, reintentar</button>
+  <div style="margin-top:22px;font-size:11.5px;color:#FDBA74;max-width:320px">Si no aparece "Permitir siempre", ve a Ajustes → Apps → S2S Point → Permisos → Ubicación → "Permitir siempre".</div>
+</div>
+
 <div id="s-login" class="scr on">
   <div class="login-hero">
     <div class="logo-anim">
