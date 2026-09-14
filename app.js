@@ -1369,7 +1369,7 @@ function setupNavGuard(){
       return;
     }
     // En el inicio: confirmar antes de salir
-    if(confirm('¿Cerrar S2S Point?\n\nRecomendado: mantén el app ABIERTO durante tu ruta para que registre tu ubicación automáticamente.')){
+    if(confirm('¿Cerrar Aspery?\n\nRecomendado: mantén el app ABIERTO durante tu ruta para que registre tu ubicación automáticamente.')){
       history.back();
     } else {
       try{ history.pushState({s2s:1}, ''); }catch(e){}
@@ -1419,7 +1419,7 @@ function iniciarRastreoNativo(){
     if(!BG) return;
     if(_bgWatcher){ ocultarBloqueoGPS(); return; }
     BG.addWatcher({
-      backgroundTitle: 'S2S Point',
+      backgroundTitle: 'Aspery',
       backgroundMessage: 'Registrando tu ubicación durante la ruta',
       requestPermissions: true,
       stale: false,
@@ -2142,7 +2142,7 @@ function buildCierre() {
     for (var i = 0; i < skuLines.length; i++) lines.push(skuLines[i]);
   }
   lines.push('');
-  lines.push('Enviado desde S2S Point');
+  lines.push('Enviado desde Aspery');
 
   var cm = ge('cierre-msg');
   if (cm) cm.value = lines.join('\n');
