@@ -1220,6 +1220,28 @@ function guardarMarcacion(id){
 }
 
 function compartirNativo(txt){
+  // En la APK: guardar la foto en el equipo y compartir FOTO + TEXTO con el plugin nativo
+  try{
+    if(esNativo() && window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.Filesystem && Capacitor.Plugins.Share){
+      var FS=Capacitor.Plugins.Filesystem, SH=Capacitor.Plugins.Share;
+      var nombre='marcacion_'+MC_TIPO.toLowerCase()+'_'+Date.now()+'.jpg';
+      var b64=(MC_PHOTO.split(',')[1]||'');
+      FS.writeFile({ path:nombre, data:b64, directory:'CACHE' })
+        .then(function(res){
+          var uri = (res && res.uri) ? res.uri : null;
+          if(uri) return SH.share({ text:txt, files:[uri], dialogTitle:'Compartir marcación' });
+          return FS.getUri({ path:nombre, directory:'CACHE' }).then(function(u){ return SH.share({ text:txt, files:[u.uri], dialogTitle:'Compartir marcación' }); });
+        })
+        .then(function(){ finMarca(); })
+        .catch(function(e){
+          // Si falla el archivo, al menos compartir el texto
+          try{ SH.share({ text:txt }).then(function(){ finMarca(); }).catch(function(){ finMarca(); }); }
+          catch(_){ finMarca(); }
+        });
+      return;
+    }
+  }catch(e){}
+  // Navegador (PWA): Web Share API con archivo
   try{
     var arr=MC_PHOTO.split(','), bstr=atob(arr[1]), n=bstr.length, u8=new Uint8Array(n);
     while(n--) u8[n]=bstr.charCodeAt(n);
@@ -1231,7 +1253,7 @@ function compartirNativo(txt){
       return;
     }
   }catch(e){}
-  // Fallback: descargar foto y abrir WhatsApp con el texto
+  // Fallback final: descargar foto y abrir WhatsApp con el texto
   try{
     var a=document.createElement('a'); a.href=MC_PHOTO; a.download='marcacion_'+MC_TIPO.toLowerCase()+'.jpg';
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
