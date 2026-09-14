@@ -495,6 +495,7 @@ html,body{height:100%;overflow:hidden;background:var(--dark);font-family:-apple-
       </div>
       <div class="hdr-btns">
         <button class="hdr-bell" type="button" onclick="showAlertModal()" aria-label="Alertas">🔔<div class="bell-dot"></div></button>
+        <button class="hdr-bell" type="button" onclick="G('s-manual-prom')" aria-label="Manual" style="font-size:15px">📖</button>
         <button class="hdr-bell" type="button" onclick="confirmarSalida()" aria-label="Cerrar sesion" style="font-size:15px">🔓</button>
       </div>
     </div>
@@ -509,23 +510,12 @@ html,body{height:100%;overflow:hidden;background:var(--dark);font-family:-apple-
       <div class="sc"><div class="sc-lbl">Neto visitados</div><div class="sc-val b" id="st-n">0</div></div>
       <div class="sc"><div class="sc-lbl">Efectividad</div><div class="sc-val" id="st-ef">0%</div><div class="ebar"><div class="efill" id="ef-bar" style="width:0%"></div></div></div>
     </div>
-    <button class="manual-btn" type="button" onclick="G('s-manual-prom')">
-      <span style="font-size:24px">📖</span>
-      <div style="flex:1;text-align:left">
-        <p style="font-size:14px;font-weight:600;color:#fff">Manual del app</p>
-        <p style="font-size:12px;color:rgba(255,255,255,.5);margin-top:1px">Guía de uso · S2S Point</p>
-      </div>
-      <span style="font-size:18px;color:rgba(255,255,255,.4)">›</span>
-    </button>
     <div class="abt-list">
       <button class="abt abt-full" type="button" onclick="irARelevear()">
         <div class="abt-ico">＋</div><span class="abt-lbl">Relevar pedido</span>
       </button>
-      <button class="abt" type="button" onclick="iniciarMarcacion('INICIO')">
-        <div class="abt-ico ai-green">📍</div><span class="abt-lbl">Marcar inicio de ruta</span>
-      </button>
-      <button class="abt" type="button" onclick="iniciarMarcacion('FIN')">
-        <div class="abt-ico ai-navy">🏁</div><span class="abt-lbl">Marcar fin de ruta</span>
+      <button class="abt" id="btn-marca" type="button" onclick="marcaToggle()">
+        <div class="abt-ico ai-green" id="btn-marca-ico">📍</div><span class="abt-lbl" id="btn-marca-lbl">Marcar inicio de ruta</span>
       </button>
       <button class="abt" type="button" onclick="G('s-distdia')">
         <div class="abt-ico ai-slate">🚚</div><span class="abt-lbl" id="abt-dd-lbl">Distribuidora del día</span>
@@ -539,8 +529,8 @@ html,body{height:100%;overflow:hidden;background:var(--dark);font-family:-apple-
       <button class="abt" type="button" onclick="G('s-cierre')">
         <div class="abt-ico ai-green">🔒</div><span class="abt-lbl">Cierre del día</span>
       </button>
-      <button class="abt" type="button" onclick="G('s-sync')">
-        <div class="abt-ico ai-amber">🔄</div><span class="abt-lbl">Sincronizar relevos del día</span>
+      <button class="abt" id="abt-sync" type="button" onclick="G('s-sync')" style="display:none">
+        <div class="abt-ico ai-red">🔄</div><span class="abt-lbl" id="abt-sync-lbl">Sincronizar pendientes</span>
       </button>
     </div>
     <div class="recent-sec">

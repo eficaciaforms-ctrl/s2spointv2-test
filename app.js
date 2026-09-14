@@ -87,14 +87,11 @@ function fraseDelDia() {
 }
 
 function mostrarFraseMotivacional() {
-  // Solo mostrar 1 vez por dia por usuario
+  // Se muestra SIEMPRE al ingresar (cada login)
   try {
-    var key = 's2s_motiv_shown_' + APP_USER + '_' + APP_FECHA;
-    if (localStorage.getItem(key)) return; // ya se mostro hoy
     var txt = ge('motiv-text');
     if (txt) txt.textContent = fraseDelDia();
     openModal('m-motiv');
-    localStorage.setItem(key, '1');
   } catch (e) { /* sin localStorage no pasa nada */ }
 }
 
@@ -197,14 +194,24 @@ function sKey(t) { return 's2s_' + t + '_' + APP_USER + '_' + APP_FECHA; }
 function saveHist() {
   try {
     localStorage.setItem(sKey('h'), JSON.stringify(APP_HIST));
-    localStorage.setItem(sKey('p'), JSON.stringify(APP_PEND));
+    // Los pendientes se guardan en clave GLOBAL (no por fecha): así nunca se
+    // pierde un relevo sin subir, aunque cambie la fecha de trabajo.
+    localStorage.setItem('s2s_pendall_' + APP_USER, JSON.stringify(APP_PEND));
   } catch (e) { console.warn('storage full'); }
 }
 
 function loadHist() {
   try {
     APP_HIST = JSON.parse(localStorage.getItem(sKey('h')) || '[]');
-    APP_PEND = JSON.parse(localStorage.getItem(sKey('p')) || '[]');
+    // Cargar pendientes GLOBALES; migrar los que estaban por fecha (versión anterior)
+    var glob = JSON.parse(localStorage.getItem('s2s_pendall_' + APP_USER) || '[]');
+    var viejo = JSON.parse(localStorage.getItem(sKey('p')) || '[]');
+    var vistos = {};
+    APP_PEND = [];
+    glob.concat(viejo).forEach(function(it){
+      if (it && it.id && !vistos[it.id]) { vistos[it.id] = 1; APP_PEND.push(it); }
+    });
+    localStorage.setItem('s2s_pendall_' + APP_USER, JSON.stringify(APP_PEND));
   } catch (e) { APP_HIST = []; APP_PEND = []; }
 }
 
@@ -471,9 +478,41 @@ function metricas(h) {
   return {vis: vis, ext: ext, neto: neto, cv: cv, sv: vis - cv, ef: ef, tot: tot};
 }
 
+// ── Botón único de marcación (inicio → fin con vendedor) ──
+function _inicioHechoHoy() {
+  try {
+    var last = JSON.parse(localStorage.getItem('s2s_mc_last_' + APP_USER) || 'null');
+    return !!(last && last.fecha === APP_FECHA);
+  } catch (e) { return false; }
+}
+function updateMarcaBtn() {
+  var lbl = ge('btn-marca-lbl'), ico = ge('btn-marca-ico');
+  if (_inicioHechoHoy()) {
+    if (lbl) lbl.textContent = 'Fin de ruta con vendedor';
+    if (ico) { ico.textContent = '🏁'; ico.className = 'abt-ico ai-navy'; }
+  } else {
+    if (lbl) lbl.textContent = 'Marcar inicio de ruta';
+    if (ico) { ico.textContent = '📍'; ico.className = 'abt-ico ai-green'; }
+  }
+}
+function marcaToggle() {
+  iniciarMarcacion(_inicioHechoHoy() ? 'FIN' : 'INICIO');
+}
+// ── Botón de sincronizar: solo visible si hay relevos sin subir ──
+function updateSyncBtn() {
+  var n = 0;
+  for (var i = 0; i < APP_PEND.length; i++) if (APP_PEND[i].estado === 'pendiente') n++;
+  var b = ge('abt-sync');
+  var l = ge('abt-sync-lbl');
+  if (b) b.style.display = n > 0 ? '' : 'none';
+  if (l) l.textContent = 'Sincronizar ' + n + ' pendiente(s)';
+}
+
 function refreshHome() {
   var h = histHoy();
   var m = metricas(h);
+  updateMarcaBtn();
+  updateSyncBtn();
 
   var ht = ge('h-total'); if (ht) ht.textContent = 'S/ ' + fmt(m.tot);
   var hu = ge('h-upd');   if (hu) hu.textContent = m.vis > 0 ? m.vis + ' visita(s) registradas' : 'Sin visitas aun';
