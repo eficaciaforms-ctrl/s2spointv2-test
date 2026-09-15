@@ -1423,7 +1423,7 @@ function iniciarRastreoNativo(){
       backgroundMessage: 'Registrando tu ubicación durante la ruta',
       requestPermissions: true,
       stale: false,
-      distanceFilter: 40
+      distanceFilter: 10
     }, function(location, error){
       if(error){
         // Sin permiso (o "solo mientras se usa" sin background): bloquear el uso
@@ -1435,7 +1435,7 @@ function iniciarRastreoNativo(){
       var h = new Date().getHours();
       if(h < 7 || h >= 18) return;
       var now = Date.now();
-      if(now - _bgLastPost < 5*60*1000) return;
+      if(now - _bgLastPost < 3*60*1000) return;   // máximo un envío cada 3 minutos
       _bgLastPost = now;
       var bat = (location.battery && typeof location.battery.level==='number') ? Math.round(location.battery.level*100)+'%' : '';
       gasPost({ accion:'PING_UBICACION', usuario:APP_USER,
