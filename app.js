@@ -479,24 +479,44 @@ function metricas(h) {
 }
 
 // ── Botón único de marcación (inicio → fin con vendedor) ──
-function _inicioHechoHoy() {
+// Estado de la marcación de hoy: 'ninguno' | 'sola' | 'conVendedor' | 'fin'
+function _estadoMarca() {
   try {
     var last = JSON.parse(localStorage.getItem('s2s_mc_last_' + APP_USER) || 'null');
-    return !!(last && last.fecha === APP_FECHA);
-  } catch (e) { return false; }
+    if (!last || last.fecha !== APP_FECHA) return 'ninguno';
+    if (last.tipo === 'FIN') return 'fin';
+    if (last.tipo === 'CONVEND') return 'conVendedor';
+    if (last.tipo === 'INICIO' && last.modo === 'SOLA') return 'sola';
+    return 'conVendedor'; // inicio con vendedor de una
+  } catch (e) { return 'ninguno'; }
 }
+function _inicioHechoHoy() { return _estadoMarca() !== 'ninguno'; }
 function updateMarcaBtn() {
   var lbl = ge('btn-marca-lbl'), ico = ge('btn-marca-ico');
-  if (_inicioHechoHoy()) {
+  var est = _estadoMarca();
+  if (est === 'sola') {
+    // Salió sola (amarillo) → debe marcar con el vendedor cuando llegue
+    if (lbl) lbl.textContent = 'Marcar con vendedor';
+    if (ico) { ico.textContent = '👥'; ico.className = 'abt-ico ai-amber'; }
+  } else if (est === 'conVendedor') {
+    // Ya está con vendedor (verde) → siguiente es fin de ruta
     if (lbl) lbl.textContent = 'Fin de ruta con vendedor';
     if (ico) { ico.textContent = '🏁'; ico.className = 'abt-ico ai-navy'; }
+  } else if (est === 'fin') {
+    if (lbl) lbl.textContent = 'Ruta finalizada ✓';
+    if (ico) { ico.textContent = '✅'; ico.className = 'abt-ico ai-green'; }
   } else {
+    // Sin marcar
     if (lbl) lbl.textContent = 'Marcar inicio de ruta';
     if (ico) { ico.textContent = '📍'; ico.className = 'abt-ico ai-green'; }
   }
 }
 function marcaToggle() {
-  iniciarMarcacion(_inicioHechoHoy() ? 'FIN' : 'INICIO');
+  var est = _estadoMarca();
+  if (est === 'sola') iniciarMarcacion('CONVEND');       // marcar con el vendedor
+  else if (est === 'conVendedor') iniciarMarcacion('FIN'); // fin de ruta
+  else if (est === 'fin') { alert('Ya finalizaste tu ruta de hoy. ✓'); }
+  else iniciarMarcacion('INICIO');                          // primer inicio
 }
 // ── Botón de sincronizar: solo visible si hay relevos sin subir ──
 function updateSyncBtn() {
@@ -1091,7 +1111,7 @@ function mcFlushPend(){
 }
 
 function iniciarMarcacion(tipo){
-  MC_TIPO = (tipo==='FIN') ? 'FIN' : 'INICIO';
+  MC_TIPO = (tipo==='FIN') ? 'FIN' : (tipo==='CONVEND' ? 'CONVEND' : 'INICIO');
   MC_RAW=null; MC_PHOTO=null; MC_LAT=''; MC_LNG=''; MC_UBIC=''; MC_SRV_OK=false; MC_ALTERADA=false;
   if(MC_TIPO==='INICIO'){
     // Inicio en 2 etapas: sola (esperando) o con vendedor
@@ -1104,7 +1124,7 @@ function iniciarMarcacion(tipo){
 
 function initMarcaCam(){
   mcFlushPend();
-  var t=ge('mc-cam-ttl'); if(t) t.textContent = (MC_TIPO==='FIN'?'Marcar fin de ruta':(MC_MODO==='SOLA'?'Inicio (esperando vendedor)':'Marcar inicio de ruta'));
+  var t=ge('mc-cam-ttl'); if(t) t.textContent = (MC_TIPO==='FIN'?'Marcar fin de ruta':(MC_TIPO==='CONVEND'?'Marcar con vendedor':(MC_MODO==='SOLA'?'Inicio (esperando vendedor)':'Marcar inicio de ruta')));
   setMC('mc-cam-loc','Obteniendo ubicación…');
   setMC('mc-cam-hora','Sincronizando hora…');
   capturarContexto();
@@ -1266,7 +1286,7 @@ function compartirMarca(){
             '🌐 https://maps.google.com/?q='+MC_LAT+','+MC_LNG;
   guardarMarcacion(String(Date.now()));
   // Recordar distribuidora/vendedor para precargarlos en la siguiente marcación del día
-  try{ localStorage.setItem('s2s_mc_last_'+APP_USER, JSON.stringify({fecha:MC_FECHA, dist:MC_DIST, vend:MC_VEND})); }catch(e){}
+  try{ localStorage.setItem('s2s_mc_last_'+APP_USER, JSON.stringify({fecha:MC_FECHA, dist:MC_DIST, vend:MC_VEND, modo:MC_MODO, tipo:MC_TIPO})); }catch(e){}
   compartirNativo(txt);
 }
 
