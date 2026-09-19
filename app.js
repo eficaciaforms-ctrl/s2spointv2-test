@@ -260,13 +260,14 @@ function gasPost(data, cb) {
   };
   xhr.onerror = function() { if (cb) cb(false, null); };
   xhr.ontimeout = function() { if (cb) cb(false, null); };
-  try { xhr.send(JSON.stringify(data)); } catch (e) { if (cb) cb(false, null); }
+  try { data = data || {}; data.tk = APP_TOKEN; xhr.send(JSON.stringify(data)); } catch (e) { if (cb) cb(false, null); }
 }
 
 function gasGet(params, cb) {
   if (!SCRIPT_URL || SCRIPT_URL === 'TU_SCRIPT_URL_AQUI') { if (cb) cb(null); return; }
   var qs = [];
   for (var k in params) qs.push(k + '=' + encodeURIComponent(params[k]));
+  qs.push('tk=' + encodeURIComponent(APP_TOKEN));
   qs.push('t=' + Date.now());
   var xhr = new XMLHttpRequest();
   xhr.open('GET', SCRIPT_URL + '?' + qs.join('&'), true);

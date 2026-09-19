@@ -4,6 +4,7 @@
 
 // PASO 1: Pega aqui la URL de tu GAS deployment
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzC_ANIW871GP6G3uUWowoaSHo-4cIAhObFL7xp8m_ZJjdqs2P9KWYxZIcGAX9oy8cl/exec';
+const APP_TOKEN = "ASP-dcdc1d72bd13356a6f1d0e58eda80435";
 
 const APP_NAME    = 'S2S Point';
 const APP_VERSION = '1.0.0';
