@@ -2741,25 +2741,36 @@ function initManualProm() {
   var body = ge('manual-prom-body');
   if (!body || body.getAttribute('data-loaded')) return;
   body.setAttribute('data-loaded', '1');
-  var html = '';
-  html += '<div class="man-hero man-hero-blue"><p class="man-hero-ico">\ud83d\udcf1</p><p class="man-hero-ttl">Manual del App</p><p class="man-hero-sub">Guia completa para promotoras</p></div>';
-  html += '<a href="./manual_promotor.html" target="_blank" class="man-link">';
-  html += '<div class="man-link-ico" style="background:var(--blue-l)">\ud83d\udcd6</div>';
-  html += '<div class="man-link-txt"><p class="man-link-ttl">Abrir manual completo</p><p class="man-link-sub">Guia interactiva paso a paso</p></div>';
-  html += '<span class="man-link-arr">\u203a</span></a>';
-  html += '<div class="sec"><div class="sec-body">';
-  html += '<p style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:12px">\ud83d\udccb Resumen rapido</p>';
   var pasos = [
-    ['\ud83d\ude9a', '1. Distribuidora del dia', 'Configurala al inicio de la jornada'],
-    ['\ud83c\udfea', '2. Relevar pedido', 'Busca PDV, giro, Si/No, productos o causal'],
-    ['\ud83d\uddc2', '3. Historial', 'Revisa y elimina registros del dia'],
-    ['\ud83d\udd12', '4. Cierre del dia', 'Genera el resumen y envialo por WhatsApp'],
-    ['\ud83d\udd04', '5. Sincronizar', 'Verifica que todo este en el sistema']
+    ['\ud83d\udcf2','Instalar y entrar','Abre Aspery, permite Ubicaci\u00f3n ("Permitir siempre") y C\u00e1mara, e ingresa con tu usuario.'],
+    ['\ud83d\udccd','Marcar inicio de ruta','Toca "Marcar inicio". Si el vendedor ya lleg\u00f3, elige "S\u00ed"; si vas sola, elige "Voy sola". T\u00f3mate la selfie.'],
+    ['\ud83d\udc65','Marcar con vendedor','Si iniciaste sola, cuando llegue el vendedor toca "Marcar con vendedor" y t\u00f3mate la nueva selfie. Tu estado pasa a verde.'],
+    ['\u2795','Relevar pedido','En cada punto de venta: elige el cliente, busca el SKU, pon la cantidad y guarda. Es obligatorio en cada visita.'],
+    ['\u26a0\ufe0f','Alertas de stock','Reporta quiebre (0 unidades) o prequiebre (quedan pocas) de cualquier SKU. Tu supervisor lo ve al instante.'],
+    ['\ud83c\udfc1','Fin de ruta','Al terminar, toca "Fin de ruta con vendedor" y comparte tu cierre por WhatsApp.'],
+    ['\ud83d\udd04','Sincronizar','Si el bot\u00f3n de sincronizar aparece, t\u00f3calo para subir los relevos pendientes cuando tengas se\u00f1al.']
   ];
+  var reglas = [
+    'Mant\u00e9n Aspery ABIERTO durante tu ruta (registra tu ubicaci\u00f3n sola).',
+    'Nunca cambies la fecha ni la hora de tu tel\u00e9fono.',
+    'Marca inicio y fin SIEMPRE, con foto.',
+    'Ten bater\u00eda suficiente para toda la jornada.'
+  ];
+  var html = '';
+  html += '<div class="man-hero man-hero-blue"><p class="man-hero-ico">\ud83d\udcf1</p><p class="man-hero-ttl">Manual de Aspery</p><p class="man-hero-sub">Gu\u00eda completa para promotoras</p></div>';
+  html += '<div class="sec"><div class="sec-body">';
+  html += '<p style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:12px">\ud83d\udccb Paso a paso</p>';
   for (var i = 0; i < pasos.length; i++) {
     html += '<div class="man-step"><span class="man-step-ico">' + pasos[i][0] + '</span><div><p class="man-step-ttl">' + pasos[i][1] + '</p><p class="man-step-sub">' + pasos[i][2] + '</p></div></div>';
   }
   html += '</div></div>';
+  html += '<div class="sec"><div class="sec-body">';
+  html += '<p style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:12px">\u2b50 Reglas de oro</p>';
+  for (var j = 0; j < reglas.length; j++) {
+    html += '<div class="man-step"><span class="man-step-ico">\u2713</span><div><p class="man-step-sub" style="color:var(--text)">' + reglas[j] + '</p></div></div>';
+  }
+  html += '</div></div>';
+  html += '<div style="text-align:center;font-size:11px;color:var(--t3);padding:14px">Aspery \u00b7 Desarrollado por SPG</div>';
   body.innerHTML = html;
 }
 
@@ -2767,16 +2778,22 @@ function initManualSup() {
   var body = ge('manual-sup-body');
   if (!body || body.getAttribute('data-loaded')) return;
   body.setAttribute('data-loaded', '1');
+  var pasos = [
+    ['\ud83d\udcbb','Ingresa a Aspery Dash','Desde tu celular o PC, entra con tu usuario. Ver\u00e1s solo a tu equipo.'],
+    ['\ud83d\udd50','Controla las horas','En Personal > Marcaciones ves ingreso, hora con vendedor, salida y total trabajado con vendedor.'],
+    ['\ud83d\uddfa\ufe0f','Ubicaci\u00f3n en tiempo real','Toca "Ver recorrido" para ver el Status Day: el trayecto del d\u00eda punto por punto.'],
+    ['\u2705','Control de relevos','En "D\u00edas relevados" ves qui\u00e9n relev\u00f3 (\u2713) y qui\u00e9n no (\u2717), y qui\u00e9n est\u00e1 pendiente hoy.'],
+    ['\ud83d\udea8','Atiende alertas','Hora manipulada, quiebres de stock y usuarios sin registros.']
+  ];
   var html = '';
-  html += '<div class="man-hero man-hero-purple"><p class="man-hero-ico">\ud83d\udc54</p><p class="man-hero-ttl">Manuales</p><p class="man-hero-sub">Guias para supervisores y promotoras</p></div>';
-  html += '<a href="./manual_supervisor.html" target="_blank" class="man-link">';
-  html += '<div class="man-link-ico" style="background:#EDE9FE">\ud83d\udc54</div>';
-  html += '<div class="man-link-txt"><p class="man-link-ttl">Manual del Supervisor</p><p class="man-link-sub">Panel, equipo, aprobaciones y metricas</p></div>';
-  html += '<span class="man-link-arr">\u203a</span></a>';
-  html += '<a href="./manual_promotor.html" target="_blank" class="man-link">';
-  html += '<div class="man-link-ico" style="background:var(--blue-l)">\ud83d\udc64</div>';
-  html += '<div class="man-link-txt"><p class="man-link-ttl">Manual de la Promotora</p><p class="man-link-sub">Login, PDV, pedidos, causales y cierre</p></div>';
-  html += '<span class="man-link-arr">\u203a</span></a>';
+  html += '<div class="man-hero" style="background:linear-gradient(135deg,#0284C7,#0A2E52)"><p class="man-hero-ico">\ud83d\udcca</p><p class="man-hero-ttl">Manual del Supervisor</p><p class="man-hero-sub">Aspery Dash \u00b7 seguimiento del equipo</p></div>';
+  html += '<div class="sec"><div class="sec-body">';
+  html += '<p style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:12px">\ud83d\udccb Paso a paso</p>';
+  for (var i = 0; i < pasos.length; i++) {
+    html += '<div class="man-step"><span class="man-step-ico">' + pasos[i][0] + '</span><div><p class="man-step-ttl">' + pasos[i][1] + '</p><p class="man-step-sub">' + pasos[i][2] + '</p></div></div>';
+  }
+  html += '</div></div>';
+  html += '<div style="text-align:center;font-size:11px;color:var(--t3);padding:14px">Aspery \u00b7 Desarrollado por SPG</div>';
   body.innerHTML = html;
 }
 

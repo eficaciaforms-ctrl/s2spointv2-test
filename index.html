@@ -344,6 +344,32 @@ html,body{height:100%;overflow:hidden;background:var(--dark);font-family:-apple-
 </style>
 </head>
 <body>
+<!-- ══════ BLOQUEO DE VERSIÓN WEB (solo funciona la APK) ══════ -->
+<div id="web-block" style="display:none;position:fixed;inset:0;z-index:200000;background:#051D3A;color:#fff;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:36px 26px;font-family:-apple-system,'Segoe UI',sans-serif">
+  <div style="font-size:52px;margin-bottom:6px">Asper<span style="color:#0EA5F9">y ↗</span></div>
+  <div style="width:64px;height:64px;border-radius:18px;background:#0A2E52;display:flex;align-items:center;justify-content:center;font-size:32px;margin:18px 0">📱</div>
+  <div style="font-size:20px;font-weight:800;margin-bottom:10px">Usa la aplicación Aspery</div>
+  <div style="font-size:14px;color:#9EC9E6;max-width:320px;line-height:1.5">Esta versión web ya no está disponible.<br>Descarga e instala la <b style="color:#fff">app Aspery</b> en tu teléfono para continuar con tu trabajo.</div>
+  <div style="font-size:12px;color:#5b83a6;margin-top:26px">¿Dudas? Consulta a tu supervisor.</div>
+  <div style="font-size:11px;color:#5b83a6;margin-top:36px">Desarrollado por SPG</div>
+</div>
+<script>
+(function(){
+  // Fecha de corte: desde esta fecha, la web queda bloqueada (solo APK funciona)
+  var CORTE = '2026-09-21'; // lunes
+  function esAPK(){ return !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()); }
+  function hoyISO(){ var d=new Date(); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
+  // Si NO es la APK y ya llegó la fecha de corte -> bloquear
+  if(!esAPK() && hoyISO() >= CORTE){
+    var b=document.getElementById('web-block');
+    if(b){ b.style.display='flex'; }
+    // Detener el resto del app
+    document.addEventListener('DOMContentLoaded', function(){ var b2=document.getElementById('web-block'); if(b2) b2.style.display='flex'; });
+    window.__ASPERY_BLOCKED__ = true;
+  }
+})();
+</script>
+
 <!-- ══════ PANTALLA DE ENTRADA ANIMADA (Aspery) ══════ -->
 <div id="asp-splash" style="position:fixed;inset:0;z-index:100000;background:#051D3A;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;transition:opacity .5s ease">
   <div class="asp-glow"></div>
