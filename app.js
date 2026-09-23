@@ -1213,7 +1213,7 @@ function hacerMarcaAgua(src, cb){
     ctx.textBaseline='top';
     var y=H - gh + pad*1.2;
     ctx.font='800 '+Math.round(fs*1.15)+'px -apple-system,system-ui,sans-serif';
-    ctx.fillStyle='#ffffff'; ctx.fillText('S2S POINT', pad, y);
+    ctx.fillStyle='#ffffff'; ctx.fillText('Aspery', pad, y);
     ctx.font='600 '+fs+'px -apple-system,system-ui,sans-serif';
     ctx.fillStyle='#e2e8f0'; ctx.fillText(mcFecha(MC_FECHA)+'   '+mcHora(MC_HORA), pad, y+Math.round(fs*1.5));
     var ub=MC_UBIC || (MC_LAT+', '+MC_LNG);
