@@ -384,7 +384,7 @@ function doLogin() {
 }
 
 function confirmLogin() {
-  if (APP_IS_SUP) { initSup(); return; }
+  if (APP_IS_SUP) { supRedirect(); return; }   // supervisión migrada al dashboard web
   loadHist();
   APP_DD = loadDD();
 
@@ -483,6 +483,7 @@ function metricas(h) {
 // Estado de la marcación de hoy: 'ninguno' | 'sola' | 'conVendedor' | 'fin'
 function _estadoMarca() {
   try {
+    if (_corrPendiente()) return 'pendienteCorr';
     var last = JSON.parse(localStorage.getItem('s2s_mc_last_' + APP_USER) || 'null');
     if (!last || last.fecha !== APP_FECHA) return 'ninguno';
     if (last.tipo === 'FIN') return 'fin';
@@ -503,6 +504,10 @@ function updateMarcaBtn() {
     // Ya está con vendedor (verde) → siguiente es fin de ruta
     if (lbl) lbl.textContent = 'Fin de ruta con vendedor';
     if (ico) { ico.textContent = '🏁'; ico.className = 'abt-ico ai-navy'; }
+  } else if (est === 'pendienteCorr') {
+    // Pidió corrección: espera aprobación del supervisor
+    if (lbl) lbl.textContent = 'Corrección en revisión…';
+    if (ico) { ico.textContent = '⏳'; ico.className = 'abt-ico ai-amber'; }
   } else if (est === 'fin') {
     if (lbl) lbl.textContent = 'Ruta finalizada ✓';
     if (ico) { ico.textContent = '✅'; ico.className = 'abt-ico ai-green'; }
@@ -511,6 +516,9 @@ function updateMarcaBtn() {
     if (lbl) lbl.textContent = 'Marcar inicio de ruta';
     if (ico) { ico.textContent = '📍'; ico.className = 'abt-ico ai-green'; }
   }
+  // Botón "marqué con vendedor por error": solo visible estando con vendedor
+  var cb = _ensureCorrBtn();
+  if (cb) cb.style.display = (est === 'conVendedor') ? '' : 'none';
 }
 function marcaToggle() {
   var est = _estadoMarca();
@@ -526,6 +534,7 @@ function marcaToggle() {
     }, function(v){ if(v==='si') iniciarMarcacion('CONVEND'); });
   }
   else if (est === 'conVendedor') confirmarFinDeRuta();      // fin de ruta (con repregunta + hora)
+  else if (est === 'pendienteCorr') { alert('Tu corrección está en revisión. Cuando tu supervisor la apruebe, podrás volver a marcar.'); }
   else if (est === 'fin') { alert('Ya finalizaste tu ruta de hoy. ✓'); }
   else iniciarMarcacion('INICIO');                          // primer inicio (con opciones claras)
 }
@@ -540,6 +549,7 @@ function updateSyncBtn() {
 }
 
 function refreshHome() {
+  if (_corrPendiente()) _startCorrPoll();   // reanudar chequeo de corrección si quedó pendiente
   var h = histHoy();
   var m = metricas(h);
   updateMarcaBtn();
@@ -1144,6 +1154,97 @@ function asperyAsk(cfg, cb){
 }
 function _horaLocalTxt(){ var d=new Date(); var h=d.getHours(),m=d.getMinutes(); var ap=h>=12?'p. m.':'a. m.'; var hh=h%12; if(hh===0)hh=12; return hh+':'+('0'+m).slice(-2)+' '+ap; }
 
+// ─── CORRECCIÓN DE MARCACIÓN (la promotora pide rebote al supervisor) ───────
+function _corrPendiente(){ try{ var p=JSON.parse(localStorage.getItem('s2s_corr_pend_'+APP_USER)||'null'); return !!(p && p.fecha===APP_FECHA); }catch(e){ return false; } }
+
+function _ensureCorrBtn(){
+  var ex=document.getElementById('btn-corregir'); if(ex) return ex;
+  var marca=document.getElementById('btn-marca'); if(!marca || !marca.parentNode) return null;
+  var b=document.createElement('button');
+  b.id='btn-corregir'; b.type='button'; b.className='abt'; b.style.marginTop='8px'; b.style.display='none';
+  b.onclick=pedirCorreccionMarca;
+  b.innerHTML='<div class="abt-ico ai-amber">↩️</div><span class="abt-lbl">Marqué con vendedor por error</span>';
+  marca.parentNode.insertBefore(b, marca.nextSibling);
+  return b;
+}
+
+function pedirCorreccionMarca(){
+  var last=null; try{ last=JSON.parse(localStorage.getItem('s2s_mc_last_'+APP_USER)||'null'); }catch(e){}
+  if(!last || last.tipo!=='CONVEND' || !last.id){ alert('No hay una marcación "con vendedor" de hoy para corregir.'); return; }
+  var sup = (typeof supervisorDe==='function') ? supervisorDe(APP_USER) : '';
+  asperyAsk({
+    titulo:'¿Pedir corrección?',
+    msg:'Tu supervisor revisará y, si aprueba, se anulará tu marca "con vendedor" para que vuelvas a marcar correctamente.',
+    opciones:[
+      {txt:'Sí, pedir corrección', sub:(sup?('Avisar a '+sup):'Enviar al supervisor'), val:'si', color:'amber'},
+      {txt:'No, cancelar', val:'no', color:'gray'}
+    ]
+  }, function(v){
+    if(v!=='si') return;
+    var payload={ accion:'SOLICITAR_CORRECCION_MARCA', usuario:APP_USER, supervisor:sup,
+                  id_marca:last.id, tipo_marca:'CONVEND', motivo:'Marcó con vendedor estando sola' };
+    gasPost(payload, function(ok){
+      if(!ok){ alert('No se pudo enviar la solicitud. Revisa tu señal e inténtalo de nuevo.'); return; }
+      try{ localStorage.setItem('s2s_corr_pend_'+APP_USER, JSON.stringify({idMarca:last.id, fecha:APP_FECHA})); }catch(e){}
+      _startCorrPoll();
+      refreshHome();
+      alert('✓ Solicitud enviada'+(sup?(' a '+sup):'')+'.\n\nEspera la aprobación. En cuanto tu supervisor la apruebe, podrás volver a marcar.');
+    });
+  });
+}
+
+var _CORR_TIMER=null;
+function _startCorrPoll(){
+  if(_CORR_TIMER) return;
+  _CORR_TIMER=setInterval(revisarCorreccion, 30000);
+  setTimeout(revisarCorreccion, 2000);
+}
+function revisarCorreccion(){
+  if(!_corrPendiente()){ if(_CORR_TIMER){ clearInterval(_CORR_TIMER); _CORR_TIMER=null; } return; }
+  if(!navigator.onLine) return;
+  var pend=null; try{ pend=JSON.parse(localStorage.getItem('s2s_corr_pend_'+APP_USER)||'null'); }catch(e){}
+  if(!pend || !pend.idMarca) return;
+  gasGet({accion:'correcciones_marca', promotora:APP_USER}, function(r){
+    if(!r || r.status!=='ok' || !r.filas) return;
+    var estado='';
+    for(var i=0;i<r.filas.length;i++){
+      // CAB_CORR: [0]ID [2]Promotora [4]ID Marcacion [7]Estado
+      if(String(r.filas[i][4])===String(pend.idMarca) && String(r.filas[i][7]).toUpperCase()!=='PENDIENTE'){
+        estado=String(r.filas[i][7]||'').toUpperCase(); break;
+      }
+    }
+    if(estado==='APROBADA'){
+      // Rebote aprobado: vuelve al estado "sola" para re-marcar con la foto correcta
+      var lastN=null; try{ lastN=JSON.parse(localStorage.getItem('s2s_mc_last_'+APP_USER)||'null'); }catch(e){}
+      var base={fecha:APP_FECHA, tipo:'INICIO', modo:'SOLA', dist:(lastN&&lastN.dist)||'', vend:(lastN&&lastN.vend)||'', id:''};
+      try{ localStorage.setItem('s2s_mc_last_'+APP_USER, JSON.stringify(base)); }catch(e){}
+      try{ localStorage.removeItem('s2s_corr_pend_'+APP_USER); }catch(e){}
+      if(_CORR_TIMER){ clearInterval(_CORR_TIMER); _CORR_TIMER=null; }
+      refreshHome();
+      alert('✅ Tu supervisor aprobó la corrección.\n\nYa puedes marcar "con vendedor" correctamente cuando el vendedor esté contigo.');
+    } else if(estado==='RECHAZADA'){
+      try{ localStorage.removeItem('s2s_corr_pend_'+APP_USER); }catch(e){}
+      if(_CORR_TIMER){ clearInterval(_CORR_TIMER); _CORR_TIMER=null; }
+      refreshHome();
+      alert('Tu supervisor no aprobó la corrección. Tu marca "con vendedor" se mantiene.');
+    }
+  });
+}
+
+// ─── SUPERVISIÓN MOVIDA AL DASHBOARD: el app ya no muestra el módulo de supervisor ───
+function supRedirect(){
+  var el=ge('s-sup');
+  if(el){
+    el.innerHTML='<div style="min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px;text-align:center;background:#051D3A;color:#fff">'
+      +'<div style="font-size:30px;font-weight:800;margin-bottom:12px">Asper<span style="color:#0EA5F9">y</span></div>'
+      +'<div style="font-size:18px;font-weight:700;margin-bottom:14px">La supervisión ahora está en el panel web</div>'
+      +'<p style="font-size:14px;color:#CBD5E1;line-height:1.6;max-width:320px">Toda tu gestión —equipo, aprobaciones y rebotes— está en <b>Seguimiento y Control Aspery</b> (el panel web). Ingresa ahí con tu mismo usuario y contraseña.</p>'
+      +'<button onclick="ejecutarSalida()" style="margin-top:26px;background:#0EA5F9;color:#fff;border:none;border-radius:10px;padding:13px 26px;font-size:15px;font-weight:700;cursor:pointer">Entendido</button>'
+      +'</div>';
+  }
+  G('s-sup');
+}
+
 // ── Validación de FIN DE RUTA (repregunta + aviso por hora, corte 12:00 m.) ──
 function confirmarFinDeRuta(){
   var temprano = (new Date().getHours() < 12);
@@ -1344,9 +1445,10 @@ function compartirMarca(){
             '🕐 '+hLbl+': '+mcHora(MC_HORA)+'\n'+
             '📍 Ubicación: '+(MC_UBIC || (MC_LAT+', '+MC_LNG))+'\n'+
             '🌐 https://maps.google.com/?q='+MC_LAT+','+MC_LNG;
-  guardarMarcacion(String(Date.now()));
-  // Recordar distribuidora/vendedor para precargarlos en la siguiente marcación del día
-  try{ localStorage.setItem('s2s_mc_last_'+APP_USER, JSON.stringify({fecha:MC_FECHA, dist:MC_DIST, vend:MC_VEND, modo:MC_MODO, tipo:MC_TIPO})); }catch(e){}
+  var _mcId = String(Date.now());
+  guardarMarcacion(_mcId);
+  // Recordar distribuidora/vendedor + ID de la marca (necesario para poder corregirla)
+  try{ localStorage.setItem('s2s_mc_last_'+APP_USER, JSON.stringify({fecha:MC_FECHA, dist:MC_DIST, vend:MC_VEND, modo:MC_MODO, tipo:MC_TIPO, id:_mcId})); }catch(e){}
   compartirNativo(txt);
 }
 
@@ -2857,7 +2959,7 @@ function initManualSup() {
 }
 
 function goBackManualSup() {
-  if (APP_IS_SUP) G('s-sup'); else G('s-home');
+  if (APP_IS_SUP) supRedirect(); else G('s-home');
 }
 
 // ─── SERVICE WORKER / UPDATE ─────────────────────────────
