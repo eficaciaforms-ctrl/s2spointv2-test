@@ -514,10 +514,20 @@ function updateMarcaBtn() {
 }
 function marcaToggle() {
   var est = _estadoMarca();
-  if (est === 'sola') iniciarMarcacion('CONVEND');       // marcar con el vendedor
-  else if (est === 'conVendedor') iniciarMarcacion('FIN'); // fin de ruta
+  if (est === 'sola') {
+    // Repregunta: evita marcar "con vendedor" por error estando sola
+    asperyAsk({
+      titulo:'¿El vendedor ya está contigo?',
+      msg:'Marca CON vendedor solo si ya llegó y está contigo. Si lo marcas por error, tendrás que pedir una corrección a tu supervisor.',
+      opciones:[
+        {txt:'Sí, el vendedor ya está', sub:'Marcar con vendedor', val:'si', color:'green'},
+        {txt:'No, todavía estoy sola', sub:'Volver', val:'no', color:'gray'}
+      ]
+    }, function(v){ if(v==='si') iniciarMarcacion('CONVEND'); });
+  }
+  else if (est === 'conVendedor') confirmarFinDeRuta();      // fin de ruta (con repregunta + hora)
   else if (est === 'fin') { alert('Ya finalizaste tu ruta de hoy. ✓'); }
-  else iniciarMarcacion('INICIO');                          // primer inicio
+  else iniciarMarcacion('INICIO');                          // primer inicio (con opciones claras)
 }
 // ── Botón de sincronizar: solo visible si hay relevos sin subir ──
 function updateSyncBtn() {
@@ -1111,15 +1121,64 @@ function mcFlushPend(){
   }
 }
 
+// ── Diálogo de confirmación con opciones claras (reutilizable, marca Aspery) ──
+function asperyAsk(cfg, cb){
+  var prev=document.getElementById('apk-ask-ov'); if(prev){ try{document.body.removeChild(prev);}catch(e){} }
+  var colors={green:'#16A34A',amber:'#F59E0B',navy:'#051D3A',gray:'#64748B',blue:'#0EA5F9'};
+  var ov=document.createElement('div'); ov.id='apk-ask-ov';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(5,29,58,.72);display:flex;align-items:center;justify-content:center;padding:22px;z-index:99999;font-family:-apple-system,system-ui,sans-serif';
+  var box=document.createElement('div');
+  box.style.cssText='background:#fff;border-radius:18px;max-width:380px;width:100%;padding:24px 22px;box-shadow:0 20px 50px rgba(0,0,0,.35)';
+  var h='<div style="font-size:18px;font-weight:800;color:#051D3A;margin-bottom:8px">'+(cfg.titulo||'')+'</div>';
+  if(cfg.msg) h+='<div style="font-size:14px;color:#475569;line-height:1.5;margin-bottom:18px">'+cfg.msg+'</div>';
+  box.innerHTML=h;
+  (cfg.opciones||[]).forEach(function(op){
+    var b=document.createElement('button'); var c=colors[op.color]||colors.blue;
+    b.style.cssText='display:block;width:100%;text-align:left;padding:13px 15px;margin-top:10px;border-radius:12px;border:2px solid '+c+';background:'+c+';color:#fff;font-size:15px;font-weight:700;cursor:pointer';
+    if(op.color==='gray'){ b.style.background='#fff'; b.style.color='#475569'; b.style.borderColor='#CBD5E1'; }
+    b.innerHTML=op.txt+(op.sub?('<div style="font-size:12px;font-weight:500;opacity:.85;margin-top:2px">'+op.sub+'</div>'):'');
+    b.onclick=function(){ try{document.body.removeChild(ov);}catch(e){} cb(op.val); };
+    box.appendChild(b);
+  });
+  ov.appendChild(box); document.body.appendChild(ov);
+}
+function _horaLocalTxt(){ var d=new Date(); var h=d.getHours(),m=d.getMinutes(); var ap=h>=12?'p. m.':'a. m.'; var hh=h%12; if(hh===0)hh=12; return hh+':'+('0'+m).slice(-2)+' '+ap; }
+
+// ── Validación de FIN DE RUTA (repregunta + aviso por hora, corte 12:00 m.) ──
+function confirmarFinDeRuta(){
+  var temprano = (new Date().getHours() < 12);
+  asperyAsk({
+    titulo: temprano ? '¿Cerrar ruta tan temprano?' : 'Confirmar fin de ruta',
+    msg: temprano
+      ? ('Son las '+_horaLocalTxt()+'. El fin de ruta normalmente se marca pasado el mediodía. ¿Segura que ya terminaste tu ruta de hoy? Al confirmar cierras tu día y no podrás marcar más.')
+      : ('¿Confirmas que vas a marcar tu FIN de ruta? Ya no podrás marcar más por hoy.'),
+    opciones:[
+      {txt:'No, todavía sigo en ruta', val:'no', color:'gray'},
+      {txt: temprano ? 'Sí, ya terminé — cerrar ruta' : 'Sí, es mi fin de ruta', val:'si', color:'navy'}
+    ]
+  }, function(v){ if(v==='si') iniciarMarcacion('FIN'); });
+}
+
 function iniciarMarcacion(tipo){
   MC_TIPO = (tipo==='FIN') ? 'FIN' : (tipo==='CONVEND' ? 'CONVEND' : 'INICIO');
   MC_RAW=null; MC_PHOTO=null; MC_LAT=''; MC_LNG=''; MC_UBIC=''; MC_SRV_OK=false; MC_ALTERADA=false;
   if(MC_TIPO==='INICIO'){
-    // Inicio en 2 etapas: sola (esperando) o con vendedor
-    MC_MODO = confirm('¿El vendedor ya está contigo?\n\n• Aceptar = Sí, inicio CON vendedor\n• Cancelar = Aún no, inicio SOLA (esperando al vendedor)') ? 'VENDEDOR' : 'SOLA';
-  } else {
-    MC_MODO = 'VENDEDOR';
+    // Inicio con opciones CLARAS: con vendedor o sola (esperando al vendedor)
+    asperyAsk({
+      titulo:'¿Cómo vas a iniciar tu ruta?',
+      msg:'Elige según tu situación ahora mismo:',
+      opciones:[
+        {txt:'👥 Marcar CON vendedor', sub:'El vendedor ya está conmigo', val:'VENDEDOR', color:'green'},
+        {txt:'🧍‍♀️ Marcar SOLA', sub:'Esperando al vendedor', val:'SOLA', color:'amber'}
+      ]
+    }, function(v){
+      if(!v) return;
+      MC_MODO = (v==='VENDEDOR') ? 'VENDEDOR' : 'SOLA';
+      G('s-marca-cam');
+    });
+    return;
   }
+  MC_MODO = 'VENDEDOR';
   G('s-marca-cam');
 }
 
