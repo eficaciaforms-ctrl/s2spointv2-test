@@ -1231,6 +1231,44 @@ function revisarCorreccion(){
   });
 }
 
+// ─── ANULACIÓN DESDE EL PANEL: el jefe/supervisor anuló una marca → la promotora re-marca ───
+function _anulDone(){ try{ return JSON.parse(localStorage.getItem('s2s_anul_done_'+APP_USER)||'[]'); }catch(e){ return []; } }
+function _anulMark(id){ try{ var a=_anulDone(); if(a.indexOf(id)<0){ a.push(id); localStorage.setItem('s2s_anul_done_'+APP_USER, JSON.stringify(a.slice(-50))); } }catch(e){} }
+function _revertMarcaPorTipo(tipo){
+  var key='s2s_mc_last_'+APP_USER;
+  var last=null; try{ last=JSON.parse(localStorage.getItem(key)||'null'); }catch(e){}
+  if(tipo==='FIN'){            // se anuló el fin → vuelve a "con vendedor" para re-marcar fin
+    if(last && last.fecha===APP_FECHA){ last.tipo='CONVEND'; try{ localStorage.setItem(key, JSON.stringify(last)); }catch(e){} }
+  } else if(tipo==='CONVEND'){ // se anuló "con vendedor" → vuelve a "sola"
+    if(last && last.fecha===APP_FECHA){ last.tipo='INICIO'; last.modo='SOLA'; try{ localStorage.setItem(key, JSON.stringify(last)); }catch(e){} }
+  } else {                     // se anuló el inicio → sin marcar (re-marca desde cero)
+    try{ localStorage.removeItem(key); }catch(e){}
+  }
+}
+function revisarAnulacionJefe(){
+  if(!APP_USER || !navigator.onLine) return;
+  gasGet({accion:'correcciones_marca', promotora:APP_USER, estado:'ANULADA_JEFE'}, function(r){
+    if(!r || r.status!=='ok' || !r.filas || !r.filas.length) return;
+    var done=_anulDone(), pick=null;
+    for(var i=0;i<r.filas.length;i++){
+      var f=r.filas[i];
+      var idC=String(f[0]||''), fechaC=String(f[1]||'');
+      if(fechaC.indexOf(APP_FECHA)!==0) continue;   // solo de hoy
+      if(done.indexOf(idC)>=0) continue;            // ya procesada
+      if(!pick || idC>String(pick[0])) pick=f;
+    }
+    if(!pick) return;
+    var idP=String(pick[0]||''), tipoP=String(pick[5]||'').toUpperCase();
+    _anulMark(idP);
+    _revertMarcaPorTipo(tipoP);
+    try{ localStorage.removeItem('s2s_corr_pend_'+APP_USER); }catch(e){}
+    if(_CORR_TIMER){ clearInterval(_CORR_TIMER); _CORR_TIMER=null; }
+    refreshHome();
+    var etq = tipoP==='FIN' ? 'fin de ruta' : (tipoP==='CONVEND' ? 'con vendedor' : 'inicio de ruta');
+    alert('Tu supervisor anuló tu marcación de "'+etq+'".\n\nPor favor vuélvela a marcar con la foto correcta.');
+  });
+}
+
 // ─── SUPERVISIÓN MOVIDA AL DASHBOARD: el app ya no muestra el módulo de supervisor ───
 function supRedirect(){
   var el=ge('s-sup');
@@ -1515,24 +1553,34 @@ function finMarca(){
 // ═══════════════════════════════════════════════════════════
 // PING DE UBICACION EN TIEMPO REAL (mientras el app este abierto)
 // Se dispara: al iniciar sesion, cada vez que la promotora vuelve
-// al app (agarra el telefono) y cada 4 min mientras este visible.
+// al app (agarra el telefono) y cada 1 min mientras este visible.
 // ═══════════════════════════════════════════════════════════
 var _pingLast=0, _pingMin=25000, _pingTimer=null, _pingSetup=false;
+var _ANUL_TIMER=null;           // revisa anulaciones del panel
+var PING_INTERVALO_MS = 60000;  // cada cuánto manda ubicación (60000 = 1 minuto)
+// ── Seguimiento en vivo (rastreo nativo en la APK) ──
+var SEG_MIN_MS   = 60000;  // máximo 1 envío por minuto
+var SEG_HORA_INI = 6;      // empieza a registrar a las 6:00 am
+var SEG_HORA_FIN = 20;     // deja de registrar a las 8:00 pm (fuera de ese rango NO guarda ubicación)
 
 function setupPing(){
   if(_pingSetup) return; _pingSetup=true;
   // Al volver a ver el app (desbloquear / cambiar de app y volver)
   document.addEventListener('visibilitychange', function(){
-    if(document.visibilityState==='visible'){ pingUbicacion(false); verificarUbicacion(); }
+    if(document.visibilityState==='visible'){ pingUbicacion(false); verificarUbicacion(); revisarAnulacionJefe(); }
   });
-  window.addEventListener('focus', function(){ pingUbicacion(false); });
-  // Cada 4 minutos mientras el app este visible
+  window.addEventListener('focus', function(){ pingUbicacion(false); revisarAnulacionJefe(); });
+  // Cada 1 minuto mientras el app este visible
   if(_pingTimer) clearInterval(_pingTimer);
   _pingTimer=setInterval(function(){
     if(document.visibilityState==='visible') pingUbicacion(false);
-  }, 240000);
+  }, PING_INTERVALO_MS);
+  // Revisar anulaciones del panel cada minuto (y una vez al iniciar)
+  if(_ANUL_TIMER) clearInterval(_ANUL_TIMER);
+  _ANUL_TIMER=setInterval(function(){ if(document.visibilityState==='visible') revisarAnulacionJefe(); }, 60000);
   // Primer ping al iniciar sesion
   pingUbicacion(true);
+  revisarAnulacionJefe();
   setupNavGuard();
 }
 
@@ -1601,8 +1649,8 @@ function iniciarRastreoNativo(){
     if(!BG) return;
     if(_bgWatcher){ ocultarBloqueoGPS(); return; }
     BG.addWatcher({
-      backgroundTitle: 'Aspery',
-      backgroundMessage: 'Registrando tu ubicación durante la ruta',
+      backgroundTitle: 'Aspery · Seguimiento en vivo',
+      backgroundMessage: 'Tu ubicación está activa durante tu ruta (jornada)',
       requestPermissions: true,
       stale: false,
       distanceFilter: 10
@@ -1615,20 +1663,48 @@ function iniciarRastreoNativo(){
       ocultarBloqueoGPS();  // hay ubicación → permiso concedido
       if(!location) return;
       var h = new Date().getHours();
-      if(h < 7 || h >= 18) return;
+      if(h < SEG_HORA_INI || h >= SEG_HORA_FIN) return;  // solo dentro del horario de jornada
       var now = Date.now();
-      if(now - _bgLastPost < 3*60*1000) return;   // máximo un envío cada 3 minutos
+      if(now - _bgLastPost < SEG_MIN_MS) return;   // seguimiento en vivo: máximo 1 envío por minuto
       _bgLastPost = now;
       var bat = (location.battery && typeof location.battery.level==='number') ? Math.round(location.battery.level*100)+'%' : '';
       gasPost({ accion:'PING_UBICACION', usuario:APP_USER,
                 lat:location.latitude, lng:location.longitude,
                 precision:Math.round(location.accuracy||0), bateria:bat }, null);
+      fbWriteLive(location.latitude, location.longitude, Math.round(location.accuracy||0), bat);
     }).then(function(id){ _bgWatcher=id; }).catch(function(){ mostrarBloqueoGPS(); });
   }catch(e){}
 }
 function detenerRastreoNativo(){
   try{ var BG=window.Capacitor&&Capacitor.Plugins&&Capacitor.Plugins.BackgroundGeolocation;
        if(BG&&_bgWatcher){ BG.removeWatcher({id:_bgWatcher}); _bgWatcher=null; } }catch(e){}
+}
+// ── Posición EN VIVO directo a Firestore (tiempo real) ──
+// Escribe/sobrescribe 1 documento por promotora en la colección ubicaciones_live.
+// Es "fire and forget": si falla, no pasa nada (Google Sheets queda de respaldo).
+function fbWriteLive(lat, lng, acc, bat){
+  try{
+    if(!APP_USER) return;
+    if(typeof FB_PROJECT==='undefined' || typeof FB_KEY==='undefined') return;
+    var la=Number(lat), ln=Number(lng);
+    if(isNaN(la) || isNaN(ln)) return;
+    var now=new Date();
+    var p2=function(n){ return (n<10?'0':'')+n; };
+    var fecha=now.getFullYear()+'-'+p2(now.getMonth()+1)+'-'+p2(now.getDate());
+    var hora=p2(now.getHours())+':'+p2(now.getMinutes())+':'+p2(now.getSeconds());
+    var url='https://firestore.googleapis.com/v1/projects/'+FB_PROJECT+'/databases/(default)/documents/ubicaciones_live/'+encodeURIComponent(APP_USER)+'?key='+FB_KEY;
+    var body={fields:{
+      usuario:{stringValue:APP_USER},
+      lat:{doubleValue:la},
+      lng:{doubleValue:ln},
+      precision:{doubleValue:(Number(acc)||0)},
+      bateria:{stringValue:String(bat||'')},
+      fecha:{stringValue:fecha},
+      hora:{stringValue:hora},
+      ts:{timestampValue:now.toISOString()}
+    }};
+    fetch(url,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).catch(function(){});
+  }catch(e){}
 }
 function pingUbicacion(force){
   if(!APP_USER || !navigator.onLine || !navigator.geolocation) return;
@@ -1640,6 +1716,7 @@ function pingUbicacion(force){
     var acc=Math.round(pos.coords.accuracy||0);
     var enviar=function(bat){
       gasPost({accion:'PING_UBICACION', usuario:APP_USER, lat:lat, lng:lng, precision:acc, bateria:bat}, null);
+      fbWriteLive(lat, lng, acc, bat);
     };
     try{
       if(navigator.getBattery){ navigator.getBattery().then(function(b){ enviar(Math.round(b.level*100)+'%'); }, function(){ enviar(''); }); }
@@ -2942,7 +3019,7 @@ function initManualSup() {
   var pasos = [
     ['\ud83d\udcbb','Ingresa a Aspery Dash','Desde tu celular o PC, entra con tu usuario. Ver\u00e1s solo a tu equipo.'],
     ['\ud83d\udd50','Controla las horas','En Personal > Marcaciones ves ingreso, hora con vendedor, salida y total trabajado con vendedor.'],
-    ['\ud83d\uddfa\ufe0f','Ubicaci\u00f3n en tiempo real','Toca "Ver recorrido" para ver el Status Day: el trayecto del d\u00eda punto por punto.'],
+    ['\ud83d\uddfa\ufe0f','Seguimiento en vivo','Toca "Ver recorrido" para ver el Status Day: el trayecto del d\u00eda punto por punto, en vivo.'],
     ['\u2705','Control de relevos','En "D\u00edas relevados" ves qui\u00e9n relev\u00f3 (\u2713) y qui\u00e9n no (\u2717), y qui\u00e9n est\u00e1 pendiente hoy.'],
     ['\ud83d\udea8','Atiende alertas','Hora manipulada, quiebres de stock y usuarios sin registros.']
   ];
