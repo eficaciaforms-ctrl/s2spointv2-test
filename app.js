@@ -244,6 +244,8 @@ function actualizarConexion() {
 }
 
 function gasPost(data, cb) {
+  // ── PARTE 2: espejo a Firebase (dual-write). No bloquea ni afecta el guardado a Sheets. ──
+  try{ fbMirror(data); }catch(e){}
   if (!SCRIPT_URL || SCRIPT_URL === 'TU_SCRIPT_URL_AQUI') {
     if (cb) setTimeout(function() { cb(true, null); }, 300);
     return;
@@ -261,6 +263,52 @@ function gasPost(data, cb) {
   xhr.onerror = function() { if (cb) cb(false, null); };
   xhr.ontimeout = function() { if (cb) cb(false, null); };
   try { data = data || {}; data.tk = APP_TOKEN; xhr.send(JSON.stringify(data)); } catch (e) { if (cb) cb(false, null); }
+}
+
+// ════════ PARTE 2 · ESPEJO A FIREBASE (marcaciones / ventas / stock) ════════
+// Escribe en paralelo a Firestore con TODOS los campos (incluye distrito/provincia/
+// departamento/vendedor). Idempotente por docId. Si falla, no pasa nada (Sheets es el respaldo).
+function _fbStr(v){ return { stringValue:String(v==null?'':v) }; }
+function _fbNum(v){ var n=parseFloat(v); return isNaN(n) ? {nullValue:null} : {doubleValue:n}; }
+function _fbTs(id){ var n=Number(id); return (isNaN(n)||n<=0) ? {nullValue:null} : {timestampValue:new Date(n).toISOString()}; }
+function _fbPatch(coll, docId, fields){
+  try{
+    if(typeof FB_PROJECT==='undefined' || typeof FB_KEY==='undefined' || !docId) return;
+    var url='https://firestore.googleapis.com/v1/projects/'+FB_PROJECT+'/databases/(default)/documents/'+coll+'/'+encodeURIComponent(docId)+'?key='+FB_KEY;
+    fetch(url,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({fields:fields})}).catch(function(){});
+  }catch(e){}
+}
+function fbMarcaDoc(p){
+  if(!p || !p.id) return;
+  var foto = (p.foto && String(p.foto).indexOf('http')===0) ? p.foto : ''; // no guardamos base64 (muy pesado)
+  _fbPatch('marcaciones', String(p.id), {
+    id:_fbStr(p.id), orden:_fbNum(p.id), fecha:_fbStr(p.fecha), hora:_fbStr(p.hora_srv),
+    usuario:_fbStr(String(p.usuario||'').trim()), tipo:_fbStr(p.tipo), dist:_fbStr(p.dist), vendedor:_fbStr(p.vendedor),
+    lat:_fbNum(p.lat), lng:_fbNum(p.lng), ubic:_fbStr(p.ubic), bateria:_fbStr(p.bateria), fotoURL:_fbStr(foto), ts:_fbTs(p.id)
+  });
+}
+function fbVentaFila(r){
+  if(!r) return; var id=String(r[0]||''); if(!id) return; var ean=String(r[17]||'x');
+  _fbPatch('ventas', id+'_'+ean, {
+    id:_fbStr(r[0]), orden:_fbNum(r[0]), fecha:_fbStr(r[2]), hora:_fbStr(r[3]), usuario:_fbStr(String(r[4]||'').trim()),
+    dist:_fbStr(r[5]), mesa:_fbStr(r[6]), vendedor:_fbStr(r[7]), pdv:_fbStr(r[8]), ruc:_fbStr(r[9]), direccion:_fbStr(r[10]),
+    distrito:_fbStr(r[11]), provincia:_fbStr(r[12]), departamento:_fbStr(r[13]), giro:_fbStr(r[14]), subgiro:_fbStr(r[15]),
+    pedido:_fbStr(r[16]), ean:_fbStr(r[17]), prod:_fbStr(r[18]), marca:_fbStr(r[19]), cantidad:_fbNum(r[20]), um:_fbStr(r[21]),
+    precioUnit:_fbNum(r[22]), subtotal:_fbNum(r[23]), total:_fbNum(r[24]), causal:_fbStr(r[25]), causalDet:_fbStr(r[26]), obs:_fbStr(r[27]), ts:_fbTs(r[0])
+  });
+}
+function fbStockFila(r){
+  if(!r) return; var id=String(r[0]||''); if(!id) return; var ean=String(r[5]||'x');
+  _fbPatch('stock', id+'_'+ean, {
+    id:_fbStr(r[0]), orden:_fbNum(r[0]), fecha:_fbStr(r[1]), hora:_fbStr(r[2]), usuario:_fbStr(String(r[3]||'').trim()),
+    dist:_fbStr(r[4]), ean:_fbStr(r[5]), prod:_fbStr(r[6]), marca:_fbStr(r[7]), cat:_fbStr(r[8]), top:_fbStr(r[9]), unidades:_fbNum(r[10]), ts:_fbTs(r[0])
+  });
+}
+function fbMirror(data){
+  if(!data || !data.accion) return;
+  if(data.accion==='GUARDAR_MARCACION'){ fbMarcaDoc(data); }
+  else if(data.accion==='GUARDAR' && data.filas){ data.filas.forEach(function(r){ fbVentaFila(r); }); }
+  else if(data.accion==='GUARDAR_STOCK' && data.filas){ data.filas.forEach(function(r){ fbStockFila(r); }); }
 }
 
 function gasGet(params, cb) {
