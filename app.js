@@ -1550,23 +1550,36 @@ function guardarMarcacion(id){
 }
 
 function compartirNativo(txt){
-  // En la APK: guardar la foto en el equipo y compartir FOTO + TEXTO con el plugin nativo
+  // En la APK: la FOTO lleva marca de agua con TODA la info (fecha/hora/ubicación),
+  // así que lo prioritario es que la FOTO se envíe. Si el combo foto+texto falla en
+  // algún equipo, se reintenta con la FOTO SOLA (nunca cae a "solo texto").
   try{
     if(esNativo() && window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.Filesystem && Capacitor.Plugins.Share){
       var FS=Capacitor.Plugins.Filesystem, SH=Capacitor.Plugins.Share;
       var nombre='marcacion_'+MC_TIPO.toLowerCase()+'_'+Date.now()+'.jpg';
-      var b64=(MC_PHOTO.split(',')[1]||'');
+      var b64=(String(MC_PHOTO||'').split(',')[1]||'');
+      if(!b64){ SH.share({ text:txt }).then(function(){ finMarca(); }).catch(function(){ finMarca(); }); return; }
+      var compartirConUri=function(uri){
+        // 1º: foto + texto como pie
+        SH.share({ title:'Marcación Aspery', text:txt, url:uri, files:[uri], dialogTitle:'Enviar marcación' })
+          .then(function(){ finMarca(); })
+          .catch(function(){
+            // 2º: SOLO la foto (ya tiene toda la info en la marca de agua)
+            SH.share({ url:uri, files:[uri], dialogTitle:'Enviar foto de marcación' })
+              .then(function(){ finMarca(); })
+              .catch(function(){
+                // 3º (último recurso): solo texto
+                SH.share({ text:txt }).then(function(){ finMarca(); }).catch(function(){ finMarca(); });
+              });
+          });
+      };
       FS.writeFile({ path:nombre, data:b64, directory:'CACHE' })
         .then(function(res){
-          var uri = (res && res.uri) ? res.uri : null;
-          if(uri) return SH.share({ text:txt, files:[uri], dialogTitle:'Compartir marcación' });
-          return FS.getUri({ path:nombre, directory:'CACHE' }).then(function(u){ return SH.share({ text:txt, files:[u.uri], dialogTitle:'Compartir marcación' }); });
+          if(res && res.uri){ compartirConUri(res.uri); }
+          else { FS.getUri({ path:nombre, directory:'CACHE' }).then(function(u){ compartirConUri(u.uri); }).catch(function(){ SH.share({ text:txt }).then(function(){ finMarca(); }).catch(function(){ finMarca(); }); }); }
         })
-        .then(function(){ finMarca(); })
-        .catch(function(e){
-          // Si falla el archivo, al menos compartir el texto
-          try{ SH.share({ text:txt }).then(function(){ finMarca(); }).catch(function(){ finMarca(); }); }
-          catch(_){ finMarca(); }
+        .catch(function(){
+          SH.share({ text:txt }).then(function(){ finMarca(); }).catch(function(){ finMarca(); });
         });
       return;
     }
