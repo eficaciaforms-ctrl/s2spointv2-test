@@ -1618,9 +1618,9 @@ function finMarca(){
 // ═══════════════════════════════════════════════════════════
 var _pingLast=0, _pingMin=25000, _pingTimer=null, _pingSetup=false;
 var _ANUL_TIMER=null;           // revisa anulaciones del panel
-var PING_INTERVALO_MS = 60000;  // cada cuánto manda ubicación (60000 = 1 minuto)
+var PING_INTERVALO_MS = 120000;  // cada cuánto manda ubicación (120000 = 2 min; equilibra frescura y cupo Firebase)
 // ── Seguimiento en vivo (rastreo nativo en la APK) ──
-var SEG_MIN_MS   = 60000;  // máximo 1 envío por minuto
+var SEG_MIN_MS   = 120000;  // LATIDO: reporta cada 2 min aunque esté quieta (no solo al moverse)
 var SEG_HORA_INI = 6;      // empieza a registrar a las 6:00 am
 var SEG_HORA_FIN = 20;     // deja de registrar a las 8:00 pm (fuera de ese rango NO guarda ubicación)
 
@@ -1714,7 +1714,7 @@ function iniciarRastreoNativo(){
       backgroundMessage: 'Tu ubicación está activa durante tu ruta (jornada)',
       requestPermissions: true,
       stale: false,
-      distanceFilter: 10
+      distanceFilter: 0
     }, function(location, error){
       if(error){
         // Sin permiso (o "solo mientras se usa" sin background): bloquear el uso
@@ -1733,6 +1733,7 @@ function iniciarRastreoNativo(){
                 lat:location.latitude, lng:location.longitude,
                 precision:Math.round(location.accuracy||0), bateria:bat }, null);
       fbWriteLive(location.latitude, location.longitude, Math.round(location.accuracy||0), bat);
+      fbWriteHistory(location.latitude, location.longitude, Math.round(location.accuracy||0), bat);
     }).then(function(id){ _bgWatcher=id; }).catch(function(){ mostrarBloqueoGPS(); });
   }catch(e){}
 }
@@ -1767,6 +1768,34 @@ function fbWriteLive(lat, lng, acc, bat){
     fetch(url,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).catch(function(){});
   }catch(e){}
 }
+// HISTORIAL de ubicación en Firebase → el recorrido del día se lee de aquí (rápido).
+// Un documento por ping (clave única usuario_timestamp). Throttle propio ~2 min para cuidar el cupo.
+var _lastHist=0;
+function fbWriteHistory(lat, lng, acc, bat){
+  try{
+    if(!APP_USER) return;
+    if(typeof FB_PROJECT==='undefined' || typeof FB_KEY==='undefined') return;
+    var la=Number(lat), ln=Number(lng);
+    if(isNaN(la) || isNaN(ln)) return;
+    var nowMs=Date.now();
+    if(nowMs-_lastHist < 115000) return;  // máx 1 cada ~2 min
+    _lastHist=nowMs;
+    var now=new Date();
+    var p2=function(n){ return (n<10?'0':'')+n; };
+    var fecha=now.getFullYear()+'-'+p2(now.getMonth()+1)+'-'+p2(now.getDate());
+    var hora=p2(now.getHours())+':'+p2(now.getMinutes())+':'+p2(now.getSeconds());
+    var docId=APP_USER+'_'+nowMs;
+    var url='https://firestore.googleapis.com/v1/projects/'+FB_PROJECT+'/databases/(default)/documents/ubicaciones/'+encodeURIComponent(docId)+'?key='+FB_KEY;
+    var body={fields:{
+      usuario:{stringValue:APP_USER},
+      uf:{stringValue:APP_USER+'_'+fecha},   // clave combinada para consultar el recorrido sin índices
+      lat:{doubleValue:la}, lng:{doubleValue:ln},
+      precision:{doubleValue:(Number(acc)||0)}, bateria:{stringValue:String(bat||'')},
+      fecha:{stringValue:fecha}, hora:{stringValue:hora}, ts:{timestampValue:now.toISOString()}
+    }};
+    fetch(url,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).catch(function(){});
+  }catch(e){}
+}
 function pingUbicacion(force){
   if(!APP_USER || !navigator.onLine || !navigator.geolocation) return;
   var now=Date.now();
@@ -1778,6 +1807,7 @@ function pingUbicacion(force){
     var enviar=function(bat){
       gasPost({accion:'PING_UBICACION', usuario:APP_USER, lat:lat, lng:lng, precision:acc, bateria:bat}, null);
       fbWriteLive(lat, lng, acc, bat);
+      fbWriteHistory(lat, lng, acc, bat);
     };
     try{
       if(navigator.getBattery){ navigator.getBattery().then(function(b){ enviar(Math.round(b.level*100)+'%'); }, function(){ enviar(''); }); }

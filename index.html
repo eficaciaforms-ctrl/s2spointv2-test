@@ -430,12 +430,12 @@ html,body{height:100%;overflow:hidden;background:var(--dark);font-family:-apple-
 
 <!-- ══════ LOGIN ══════ -->
 <div id="s-gps-block" style="display:none;position:fixed;inset:0;z-index:9999;background:linear-gradient(165deg,#7C2D12,#0F172A);color:#fff;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:34px 26px">
-  <div style="font-size:56px;margin-bottom:10px">📍</div>
-  <div style="font-size:22px;font-weight:800;margin-bottom:10px">Activa tu ubicación</div>
-  <div style="font-size:14px;line-height:1.55;color:#FED7AA;max-width:340px">Para usar Aspery necesitas permitir el acceso a tu ubicación en modo <b style="color:#fff">"Permitir siempre"</b>. Es obligatorio para registrar tu ruta.</div>
-  <button type="button" onclick="abrirAjustesUbicacion()" style="margin-top:24px;background:#F97316;color:#fff;border:none;border-radius:14px;padding:15px 26px;font-size:15px;font-weight:700;cursor:pointer;width:100%;max-width:320px">Activar ubicación</button>
-  <button type="button" onclick="verificarUbicacion()" style="margin-top:12px;background:transparent;color:#FED7AA;border:none;font-size:13px;cursor:pointer;text-decoration:underline">Ya la activé, reintentar</button>
-  <div style="margin-top:22px;font-size:11.5px;color:#FDBA74;max-width:320px">Si no aparece "Permitir siempre", ve a Ajustes → Apps → Aspery → Permisos → Ubicación → "Permitir siempre".</div>
+  <div style="font-size:56px;margin-bottom:10px">🛰️</div>
+  <div style="font-size:22px;font-weight:800;margin-bottom:10px">Activa el Seguimiento en vivo</div>
+  <div style="font-size:14px;line-height:1.55;color:#FED7AA;max-width:340px">Aspery registra tu ubicación <b style="color:#fff">solo durante tu jornada (ruta)</b> para el seguimiento del equipo. Para que funcione necesitas permitir el acceso en modo <b style="color:#fff">"Permitir siempre"</b>.</div>
+  <button type="button" onclick="abrirAjustesUbicacion()" style="margin-top:24px;background:#F97316;color:#fff;border:none;border-radius:14px;padding:15px 26px;font-size:15px;font-weight:700;cursor:pointer;width:100%;max-width:320px">Activar seguimiento en vivo</button>
+  <button type="button" onclick="verificarUbicacion()" style="margin-top:12px;background:transparent;color:#FED7AA;border:none;font-size:13px;cursor:pointer;text-decoration:underline">Ya lo activé, reintentar</button>
+  <div style="margin-top:22px;font-size:11.5px;color:#FDBA74;max-width:320px">Mientras el seguimiento esté activo verás un aviso permanente en tu teléfono: "Aspery · Seguimiento en vivo". Si no aparece "Permitir siempre", ve a Ajustes → Apps → Aspery → Permisos → Ubicación → "Permitir siempre".</div>
 </div>
 
 <div id="s-login" class="scr on">
@@ -1140,6 +1140,7 @@ html,body{height:100%;overflow:hidden;background:var(--dark);font-family:-apple-
 </div><!-- /app -->
 
 <script src="./config.js"></script>
+<script src="./ota.js"></script>
 <script>
 // Cargar base_pdv.js async (5MB) sin bloquear el arranque
 (function(){
