@@ -1,0 +1,84 @@
+name: Publicar actualizacion OTA
+
+# Cada vez que cambie el app (push a main), este workflow empaqueta la nueva
+# version y la publica en GitHub Pages. Los telefonos la descargan solos la
+# proxima vez que abran el app. NO vuelve a generar APK ni pide reinstalar.
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar el repositorio del app
+        uses: actions/checkout@v4
+
+      - name: Instalar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Preparar los archivos del app (staging)
+        run: |
+          rm -rf _bundle
+          mkdir _bundle
+          # Copiar todo el app EXCEPTO git, workflows y documentacion
+          rsync -a ./ _bundle/ \
+            --exclude '.git' \
+            --exclude '.github' \
+            --exclude '_bundle' \
+            --exclude 'README.md'
+          echo "----- Contenido del bundle -----"
+          ls -la _bundle
+
+      - name: Ofuscar el codigo logico (proteccion, sin inflar el peso)
+        run: |
+          npm install -g javascript-obfuscator || true
+          for archivo in _bundle/app.js _bundle/config.js; do
+            if [ -f "$archivo" ]; then
+              javascript-obfuscator "$archivo" --output "$archivo" \
+                --compact true --control-flow-flattening true \
+                --string-array true --string-array-encoding base64 \
+                --self-defending true || echo "ofuscacion omitida en $archivo"
+            fi
+          done
+          echo "Ofuscacion completada (base_pdv.js queda igual: es solo datos y asi la descarga pesa menos)"
+
+      - name: Empaquetar el bundle (.zip con index.html en la raiz)
+        run: |
+          VER="${{ github.run_number }}"
+          mkdir -p _pages
+          cd _bundle
+          zip -r -q "../_pages/aspery-$VER.zip" .
+          cd ..
+          echo "Bundle creado: aspery-$VER.zip"
+          ls -lh _pages
+
+      - name: Escribir el manifiesto (lo que lee el app)
+        run: |
+          VER="${{ github.run_number }}"
+          BASE="https://eficaciaforms-ctrl.github.io/s2spointv2-test"
+          cat > _pages/ota-manifest.json <<JSON
+          {
+            "version": "$VER",
+            "url": "$BASE/aspery-$VER.zip",
+            "fecha": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "nota": "Actualizacion automatica de Aspery"
+          }
+          JSON
+          echo "----- ota-manifest.json -----"
+          cat _pages/ota-manifest.json
+
+      - name: Publicar en GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./_pages
+          publish_branch: gh-pages
+          keep_files: true
