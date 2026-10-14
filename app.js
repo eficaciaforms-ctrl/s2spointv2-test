@@ -1618,9 +1618,18 @@ function finMarca(){
 // ═══════════════════════════════════════════════════════════
 var _pingLast=0, _pingMin=25000, _pingTimer=null, _pingSetup=false;
 var _ANUL_TIMER=null;           // revisa anulaciones del panel
-var PING_INTERVALO_MS = 120000;  // cada cuánto manda ubicación (120000 = 2 min; equilibra frescura y cupo Firebase)
+var PING_INTERVALO_MS = 300000;  // respaldo (app a la vista): cada 5 min
 // ── Seguimiento en vivo (rastreo nativo en la APK) ──
-var SEG_MIN_MS   = 120000;  // LATIDO: reporta cada 2 min aunque esté quieta (no solo al moverse)
+// El envío se adapta a si la promotora se movió o no:
+//  · QUIETA  → 1 envío cada 5 min. Es solo el "latido": avisa que el app sigue
+//              vivo. No guarda punto de recorrido (20 puntos sobre la misma
+//              bodega no dibujan nada y gastan cupo de Firebase).
+//  · MOVIÉNDOSE → hasta 1 envío cada 90 s, y SÍ guarda punto de recorrido.
+//              Así el trazo por calles queda igual de detallado que antes.
+var SEG_MIN_MS     = 300000;  // latido estando quieta: 5 min
+var SEG_MOV_MS     = 90000;   // moviéndose: como máximo 1 envío cada 90 s
+var SEG_MOV_METROS = 40;      // a partir de cuántos metros se considera movimiento
+                              // (40 m evita que el vaivén normal del GPS cuente como caminata)
 var SEG_HORA_INI = 6;      // empieza a registrar a las 6:00 am
 var SEG_HORA_FIN = 20;     // deja de registrar a las 8:00 pm (fuera de ese rango NO guarda ubicación)
 
@@ -1726,17 +1735,36 @@ function iniciarRastreoNativo(){
       var h = new Date().getHours();
       if(h < SEG_HORA_INI || h >= SEG_HORA_FIN) return;  // solo dentro del horario de jornada
       var now = Date.now();
-      if(now - _bgLastPost < SEG_MIN_MS) return;   // seguimiento en vivo: máximo 1 envío por minuto
+
+      // ¿Se movió desde el último envío?
+      var movio = (_segLat===null) ||
+                  (_segMetros(_segLat,_segLng,location.latitude,location.longitude) > SEG_MOV_METROS);
+      // Quieta: basta el latido lento. Moviéndose: se reporta más seguido.
+      var esperaMin = movio ? SEG_MOV_MS : SEG_MIN_MS;
+      if(now - _bgLastPost < esperaMin) return;
+
       _bgLastPost = now;
+      _segLat = location.latitude; _segLng = location.longitude;
       var bat = (location.battery && typeof location.battery.level==='number') ? Math.round(location.battery.level*100)+'%' : '';
       gasPost({ accion:'PING_UBICACION', usuario:APP_USER,
                 lat:location.latitude, lng:location.longitude,
                 precision:Math.round(location.accuracy||0), bateria:bat }, null);
+      // La posición en vivo siempre se actualiza (es lo que ve el supervisor)
       fbWriteLive(location.latitude, location.longitude, Math.round(location.accuracy||0), bat);
-      fbWriteHistory(location.latitude, location.longitude, Math.round(location.accuracy||0), bat);
+      // El punto de recorrido, SOLO si hubo movimiento real
+      if(movio) fbWriteHistory(location.latitude, location.longitude, Math.round(location.accuracy||0), bat);
     }).then(function(id){ _bgWatcher=id; }).catch(function(){ mostrarBloqueoGPS(); });
   }catch(e){}
 }
+// Distancia en metros entre dos coordenadas (fórmula de haversine)
+var _segLat=null, _segLng=null;
+function _segMetros(la1,ln1,la2,ln2){
+  var R=6371000, r=Math.PI/180;
+  var dLa=(la2-la1)*r, dLn=(ln2-ln1)*r;
+  var a=Math.sin(dLa/2)*Math.sin(dLa/2)+Math.cos(la1*r)*Math.cos(la2*r)*Math.sin(dLn/2)*Math.sin(dLn/2);
+  return 2*R*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+
 function detenerRastreoNativo(){
   try{ var BG=window.Capacitor&&Capacitor.Plugins&&Capacitor.Plugins.BackgroundGeolocation;
        if(BG&&_bgWatcher){ BG.removeWatcher({id:_bgWatcher}); _bgWatcher=null; } }catch(e){}
@@ -1778,7 +1806,7 @@ function fbWriteHistory(lat, lng, acc, bat){
     var la=Number(lat), ln=Number(lng);
     if(isNaN(la) || isNaN(ln)) return;
     var nowMs=Date.now();
-    if(nowMs-_lastHist < 115000) return;  // máx 1 cada ~2 min
+    if(nowMs-_lastHist < 85000) return;   // máx 1 cada ~90 s (el filtro real es el movimiento)
     _lastHist=nowMs;
     var now=new Date();
     var p2=function(n){ return (n<10?'0':'')+n; };
