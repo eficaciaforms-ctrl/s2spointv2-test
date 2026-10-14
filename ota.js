@@ -36,6 +36,20 @@
   // 1) Confirmar que el app arrancó OK (evita rollback automático de Capgo)
   try{ up.notifyAppReady(); }catch(e){ log('notifyAppReady', e && e.message); }
 
+  // 1b) Mostrar la versión en el pie de la pantalla de inicio.
+  //     Sin esto no hay forma de saber qué paquete está corriendo y cada
+  //     actualización queda a ciegas. Aparece 2 s al abrir y desaparece.
+  try{
+    up.current().then(function(c){
+      var v = (c && c.bundle && c.bundle.version) ? String(c.bundle.version) : 'base';
+      var pie = document.querySelector('.asp-foot');
+      if(pie && pie.innerHTML.indexOf('·&nbsp;v') < 0){
+        pie.innerHTML += ' ·&nbsp;v' + v;
+      }
+      log('versión en ejecución:', v);
+    }).catch(function(){});
+  }catch(e){}
+
   /* ──────────────── AVISO VISIBLE DE ACTUALIZACIÓN ──────────────── */
   function mostrarAviso(bundleId, version){
     if(document.getElementById('ota-aviso')) return;   // ya está puesto
