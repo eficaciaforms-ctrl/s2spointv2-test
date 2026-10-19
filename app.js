@@ -192,66 +192,125 @@ function closeModal(id) { var m = ge(id); if (m) m.classList.remove('open'); }
 function sKey(t) { return 's2s_' + t + '_' + APP_USER + '_' + APP_FECHA; }
 
 // Cuántos días de historial se conservan en el teléfono.
-// El historial servía solo para mostrar el resumen del día; guardarlo para
-// siempre llenaba la memoria (cada día pesa ~140 KB y el navegador permite
-// ~5 MB). Al llenarse, el guardado fallaba EN SILENCIO y se perdían ventas.
+// El historial y los pendientes se guardaban para siempre y llenaban la
+// memoria (~5 MB es el límite del navegador). Al llenarse, el guardado
+// fallaba EN SILENCIO y se perdían ventas.
 var DIAS_HISTORIAL = 7;
 
+// Quita de los pendientes los que YA se enviaron. Los que siguen en
+// 'pendiente' (ventas sin sincronizar) no se tocan NUNCA.
+function _soloPendientes(arr) {
+  var out = [];
+  for (var i = 0; i < (arr || []).length; i++) {
+    if (arr[i] && arr[i].estado !== 'enviado') out.push(arr[i]);
+  }
+  return out;
+}
+
 function saveHist() {
+  APP_PEND = _soloPendientes(APP_PEND);
+  var errPend = '', errHist = '';
+
   // 1) Los PENDIENTES van primero y por separado. Es lo único que no se puede
   //    perder: si el historial está lleno, que no arrastre a los pendientes.
-  var okPend = true;
   try { localStorage.setItem('s2s_pendall_' + APP_USER, JSON.stringify(APP_PEND)); }
-  catch (e) { okPend = false; }
+  catch (e) { errPend = (e && e.name) || 'error'; }
 
   // 2) El historial del día
-  var okHist = true;
   try { localStorage.setItem(sKey('h'), JSON.stringify(APP_HIST)); }
   catch (e) {
-    okHist = false;
-    // Memoria llena: liberar historiales viejos y reintentar
+    errHist = (e && e.name) || 'error';
+    // Memoria llena: liberar lo viejo y reintentar
     if (purgarHistorial()) {
-      try { localStorage.setItem(sKey('h'), JSON.stringify(APP_HIST)); okHist = true; } catch (e2) {}
-      if (!okPend) {
-        try { localStorage.setItem('s2s_pendall_' + APP_USER, JSON.stringify(APP_PEND)); okPend = true; } catch (e3) {}
+      try { localStorage.setItem(sKey('h'), JSON.stringify(APP_HIST)); errHist = ''; } catch (e2) { errHist = (e2 && e2.name) || 'error'; }
+      if (errPend) {
+        try { localStorage.setItem('s2s_pendall_' + APP_USER, JSON.stringify(APP_PEND)); errPend = ''; } catch (e3) {}
       }
     }
   }
 
   // 3) Si aun así no se pudo, hay que AVISAR. Antes esto se callaba y la
   //    promotora seguía registrando creyendo que se guardaba.
-  if (!okHist || !okPend) avisarMemoriaLlena();
-  return okHist && okPend;
+  if (errHist || errPend) avisarMemoriaLlena(errHist || errPend);
+  return !errHist && !errPend;
 }
 
-// Borra los historiales de días anteriores, conservando los últimos
-// DIAS_HISTORIAL. Nunca toca los PENDIENTES ni el historial del día actual.
+// Libera memoria del teléfono. Es seguro: solo borra
+//   · historiales y planes de días viejos, DE CUALQUIER usuario del teléfono
+//     (importante: los supervisores relevan con varios usuarios en el mismo
+//      equipo, y antes solo se limpiaba el del usuario activo), y
+//   · pendientes YA ENVIADOS. Los que siguen 'pendiente' no se borran nunca.
 function purgarHistorial() {
+  var liberado = 0;
   try {
-    if (!APP_USER) return false;
-    var pre = 's2s_h_' + APP_USER + '_';
-    var claves = [];
+    var base = new Date((APP_FECHA || '') + 'T12:00:00');
+    if (isNaN(base.getTime())) base = new Date();
+    base.setDate(base.getDate() - DIAS_HISTORIAL);
+    var corte = base.toISOString().slice(0, 10);
+
+    var protegidas = {};
+    if (APP_USER && APP_FECHA) {
+      protegidas[sKey('h')] = 1; protegidas[sKey('dd')] = 1; protegidas[sKey('c')] = 1;
+    }
+
+    var todas = [];
+    for (var i = 0; i < localStorage.length; i++) { var k = localStorage.key(i); if (k) todas.push(k); }
+
+    for (var j = 0; j < todas.length; j++) {
+      var k2 = todas[j];
+      if (protegidas[k2]) continue;
+
+      // A) Días viejos:  s2s_h_USUARIO_FECHA  ·  s2s_dd_...  ·  s2s_c_...
+      if (/^s2s_(h|dd|c)_/.test(k2)) {
+        var f = k2.slice(-10);
+        if (/^\d{4}-\d{2}-\d{2}$/.test(f) && f < corte) {
+          var peso = (localStorage.getItem(k2) || '').length;
+          try { localStorage.removeItem(k2); liberado += peso; } catch (e) {}
+        }
+        continue;
+      }
+
+      // B) Pendientes ya enviados, de cualquier usuario del teléfono
+      if (/^s2s_(pendall|stkpend|mcpend)_/.test(k2)) {
+        try {
+          var crudo = localStorage.getItem(k2) || '[]';
+          var arr = JSON.parse(crudo);
+          if (!arr || !arr.length) continue;
+          var quedan = _soloPendientes(arr);
+          if (quedan.length !== arr.length) {
+            var nuevoTxt = JSON.stringify(quedan);
+            localStorage.setItem(k2, nuevoTxt);
+            liberado += crudo.length - nuevoTxt.length;
+          }
+        } catch (e) {}
+      }
+    }
+    if (liberado) console.log('[APP] memoria liberada:', Math.round(liberado / 1024), 'KB');
+  } catch (e) {}
+  return liberado > 0;
+}
+
+// Cuánto ocupa el app y cuál es la llave más pesada (para diagnosticar en campo)
+function _memDiag() {
+  var tot = 0, mayorK = '', mayorN = 0;
+  try {
     for (var i = 0; i < localStorage.length; i++) {
-      var k = localStorage.key(i);
-      if (k && k.indexOf(pre) === 0) claves.push(k);
+      var k = localStorage.key(i); if (!k) continue;
+      var n = k.length + (localStorage.getItem(k) || '').length;
+      tot += n;
+      if (n > mayorN) { mayorN = n; mayorK = k; }
     }
-    claves.sort();                       // la fecha va al final → orden cronológico
-    var actual = sKey('h'), borradas = 0;
-    while (claves.length > DIAS_HISTORIAL) {
-      var k2 = claves.shift();
-      if (k2 !== actual) { try { localStorage.removeItem(k2); borradas++; } catch (e) {} }
-    }
-    if (borradas) console.log('[APP] historiales viejos liberados:', borradas);
-    return borradas > 0;
-  } catch (e) { return false; }
+  } catch (e) {}
+  return Math.round(tot / 1024) + 'KB · mayor ' + mayorK.replace('s2s_', '') + ' ' + Math.round(mayorN / 1024) + 'KB';
 }
 
 var _avisoMem = false;
-function avisarMemoriaLlena() {
+function avisarMemoriaLlena(cual) {
   if (_avisoMem) return; _avisoMem = true;
   var msg = 'No se pudo guardar el registro en el telefono porque la memoria esta llena.\n\n' +
             'AVISA A TU SUPERVISOR AHORA y no sigas registrando hasta que te confirmen, ' +
-            'para no perder informacion.';
+            'para no perder informacion.\n\n' +
+            'Muestrale esta linea:\n' + (cual || '?') + ' · ' + _memDiag();
   try { mostrarAlerta('Memoria llena', msg, '\u26A0\uFE0F'); }
   catch (e) { try { alert(msg); } catch (e2) {} }
 }
@@ -266,7 +325,7 @@ function loadHist() {
     var vistos = {};
     APP_PEND = [];
     glob.concat(viejo).forEach(function(it){
-      if (it && it.id && !vistos[it.id]) { vistos[it.id] = 1; APP_PEND.push(it); }
+      if (it && it.id && it.estado !== 'enviado' && !vistos[it.id]) { vistos[it.id] = 1; APP_PEND.push(it); }
     });
     localStorage.setItem('s2s_pendall_' + APP_USER, JSON.stringify(APP_PEND));
   } catch (e) { APP_HIST = []; APP_PEND = []; }
