@@ -191,16 +191,73 @@ function closeModal(id) { var m = ge(id); if (m) m.classList.remove('open'); }
 // ─── STORAGE LOCAL ───────────────────────────────────────
 function sKey(t) { return 's2s_' + t + '_' + APP_USER + '_' + APP_FECHA; }
 
+// Cuántos días de historial se conservan en el teléfono.
+// El historial servía solo para mostrar el resumen del día; guardarlo para
+// siempre llenaba la memoria (cada día pesa ~140 KB y el navegador permite
+// ~5 MB). Al llenarse, el guardado fallaba EN SILENCIO y se perdían ventas.
+var DIAS_HISTORIAL = 7;
+
 function saveHist() {
+  // 1) Los PENDIENTES van primero y por separado. Es lo único que no se puede
+  //    perder: si el historial está lleno, que no arrastre a los pendientes.
+  var okPend = true;
+  try { localStorage.setItem('s2s_pendall_' + APP_USER, JSON.stringify(APP_PEND)); }
+  catch (e) { okPend = false; }
+
+  // 2) El historial del día
+  var okHist = true;
+  try { localStorage.setItem(sKey('h'), JSON.stringify(APP_HIST)); }
+  catch (e) {
+    okHist = false;
+    // Memoria llena: liberar historiales viejos y reintentar
+    if (purgarHistorial()) {
+      try { localStorage.setItem(sKey('h'), JSON.stringify(APP_HIST)); okHist = true; } catch (e2) {}
+      if (!okPend) {
+        try { localStorage.setItem('s2s_pendall_' + APP_USER, JSON.stringify(APP_PEND)); okPend = true; } catch (e3) {}
+      }
+    }
+  }
+
+  // 3) Si aun así no se pudo, hay que AVISAR. Antes esto se callaba y la
+  //    promotora seguía registrando creyendo que se guardaba.
+  if (!okHist || !okPend) avisarMemoriaLlena();
+  return okHist && okPend;
+}
+
+// Borra los historiales de días anteriores, conservando los últimos
+// DIAS_HISTORIAL. Nunca toca los PENDIENTES ni el historial del día actual.
+function purgarHistorial() {
   try {
-    localStorage.setItem(sKey('h'), JSON.stringify(APP_HIST));
-    // Los pendientes se guardan en clave GLOBAL (no por fecha): así nunca se
-    // pierde un relevo sin subir, aunque cambie la fecha de trabajo.
-    localStorage.setItem('s2s_pendall_' + APP_USER, JSON.stringify(APP_PEND));
-  } catch (e) { console.warn('storage full'); }
+    if (!APP_USER) return false;
+    var pre = 's2s_h_' + APP_USER + '_';
+    var claves = [];
+    for (var i = 0; i < localStorage.length; i++) {
+      var k = localStorage.key(i);
+      if (k && k.indexOf(pre) === 0) claves.push(k);
+    }
+    claves.sort();                       // la fecha va al final → orden cronológico
+    var actual = sKey('h'), borradas = 0;
+    while (claves.length > DIAS_HISTORIAL) {
+      var k2 = claves.shift();
+      if (k2 !== actual) { try { localStorage.removeItem(k2); borradas++; } catch (e) {} }
+    }
+    if (borradas) console.log('[APP] historiales viejos liberados:', borradas);
+    return borradas > 0;
+  } catch (e) { return false; }
+}
+
+var _avisoMem = false;
+function avisarMemoriaLlena() {
+  if (_avisoMem) return; _avisoMem = true;
+  var msg = 'No se pudo guardar el registro en el telefono porque la memoria esta llena.\n\n' +
+            'AVISA A TU SUPERVISOR AHORA y no sigas registrando hasta que te confirmen, ' +
+            'para no perder informacion.';
+  try { mostrarAlerta('Memoria llena', msg, '\u26A0\uFE0F'); }
+  catch (e) { try { alert(msg); } catch (e2) {} }
 }
 
 function loadHist() {
+  purgarHistorial();        // liberar días viejos antes de empezar a trabajar
   try {
     APP_HIST = JSON.parse(localStorage.getItem(sKey('h')) || '[]');
     // Cargar pendientes GLOBALES; migrar los que estaban por fecha (versión anterior)
