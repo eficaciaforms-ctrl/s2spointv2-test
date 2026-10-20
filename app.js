@@ -157,6 +157,19 @@ function hideErr() {
 
 // ─── NAVEGACION ──────────────────────────────────────────
 var _curScreen='';
+// Sitúa el sello de versión encima de la barra inferior de la pantalla
+// activa, para que nunca tape un botón ni una etiqueta.
+function ubicarSelloVersion(scr) {
+  try {
+    var sello = document.getElementById('ver-fija');
+    if (!sello) return;
+    var nav = scr ? scr.querySelector('.bnav') : null;
+    var alto = 0;
+    if (nav && nav.offsetParent !== null) alto = nav.offsetHeight || 0;
+    sello.style.bottom = 'calc(' + (alto + 6) + 'px + ' + (alto ? '0px' : 'env(safe-area-inset-bottom,0px)') + ')';
+  } catch (e) {}
+}
+
 function G(id) {
   _curScreen = id;
   // Si el usuario sale de la pantalla de sync, cancelar el autocierre
@@ -172,6 +185,7 @@ function G(id) {
   for (var i = 0; i < screens.length; i++) screens[i].classList.remove('on');
   var scr = ge(id);
   if (scr) scr.classList.add('on');
+  ubicarSelloVersion(scr);
   if (id !== 's-marca-cam')   stopMarcaCam();
   if (id === 's-distdia')     initDD();
   if (id === 's-stock')       initStock();

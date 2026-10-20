@@ -19,6 +19,14 @@
   --blue-l:#E6F5FE;--teal-l:#F0FDFA;--green-l:#F0FDF4;--red-l:#FEF2F2;--amber-l:#FFFBEB;
   --hs:env(safe-area-inset-top,0px);--bs:env(safe-area-inset-bottom,0px)
 }
+.ver-app{font-size:10.5px;color:var(--t3);text-align:center;margin-top:15px;letter-spacing:.3px;font-weight:500}
+/* Sello de versión SIEMPRE visible, en todas las pantallas. Discreto y
+   no recibe toques, así nunca tapa ni bloquea un botón. */
+#ver-fija{position:fixed;right:7px;bottom:7px;z-index:90;pointer-events:none;
+  font-size:9.5px;font-weight:700;letter-spacing:.3px;color:#94A3B8;
+  background:rgba(148,163,184,.16);border:1px solid rgba(148,163,184,.24);
+  border-radius:7px;padding:2px 6px;line-height:1.5;
+  bottom:calc(7px + env(safe-area-inset-bottom,0px))}
 html,body{height:100%;overflow:hidden;background:var(--dark);font-family:-apple-system,system-ui,'Segoe UI',sans-serif}
 #app{position:fixed;inset:0;overflow:hidden}
 .scr{display:none;flex-direction:column;position:absolute;inset:0;background:var(--bg);overflow:hidden}
@@ -411,13 +419,19 @@ html,body{height:100%;overflow:hidden;background:var(--dark);font-family:-apple-
   #asp-splash.asp-hide{opacity:0;pointer-events:none}
 </style>
 <script>
-  // Ocultar el splash tras ~2.5s y quitarlo del DOM
-  window.addEventListener('load', function(){
-    setTimeout(function(){
-      var sp=document.getElementById('asp-splash');
-      if(sp){ sp.classList.add('asp-hide'); setTimeout(function(){ if(sp&&sp.parentNode) sp.parentNode.removeChild(sp); }, 600); }
-    }, 2500);
-  });
+  // Ocultar el splash tras ~2.5s y quitarlo del DOM.
+  // IMPORTANTE: antes esto dependía SOLO del evento 'load'. Si un archivo
+  // se colgaba (señal mala, recurso lento), 'load' nunca llegaba y el app
+  // quedaba congelado en esta pantalla, sin forma de usarlo. Ahora hay un
+  // respaldo por tiempo: pase lo que pase, a los 7 s se quita.
+  var _spFuera = false;
+  function quitarSplash(){
+    if(_spFuera) return; _spFuera = true;
+    var sp=document.getElementById('asp-splash');
+    if(sp){ sp.classList.add('asp-hide'); setTimeout(function(){ if(sp&&sp.parentNode) sp.parentNode.removeChild(sp); }, 600); }
+  }
+  window.addEventListener('load', function(){ setTimeout(quitarSplash, 2500); });
+  setTimeout(quitarSplash, 7000);   // respaldo: el app nunca se queda trabado aquí
 </script>
 
 <div id="banner-update">
@@ -425,6 +439,7 @@ html,body{height:100%;overflow:hidden;background:var(--dark);font-family:-apple-
   <button type="button" onclick="aplicarActualizacion()">Actualizar</button>
 </div>
 <div id="offline-bar"><p id="offline-txt"></p></div>
+<div id="ver-fija">Aspery</div>
 
 <div id="app">
 
@@ -464,6 +479,7 @@ html,body{height:100%;overflow:hidden;background:var(--dark);font-family:-apple-
       <input class="inp" id="l-fecha" type="date"/>
     </div>
     <button class="btn btn-dark" type="button" onclick="doLogin()">→ Ingresar al sistema</button>
+    <div class="ver-app"></div>
   </div>
 </div>
 
@@ -481,6 +497,7 @@ html,body{height:100%;overflow:hidden;background:var(--dark);font-family:-apple-
         <button class="btn btn-white btn-sm" type="button" onclick="G('s-login')">✏ Modificar</button>
         <button class="btn btn-blue btn-sm" type="button" onclick="confirmLogin()">✓ Sí, ingresar</button>
       </div>
+      <div class="ver-app"></div>
     </div>
   </div>
 </div>

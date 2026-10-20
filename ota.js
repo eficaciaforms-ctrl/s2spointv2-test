@@ -22,8 +22,8 @@
    ════════════════════════════════════════════════════════════════════ */
 (function(){
   var MANIFEST_URL = 'https://eficaciaforms-ctrl.github.io/s2spointv2-test/ota-manifest.json';
-  var MS_MANIFIESTO = 8000;    // esperar el manifiesto como máximo 8 s
-  var MS_ESCAPE     = 25000;   // a los 25 s ofrecer "Continuar"
+  var MS_MANIFIESTO = 10000;   // esperar el manifiesto como máximo 10 s
+  var MS_ESCAPE     = 40000;   // recién a los 40 s ofrecer "Continuar"
 
   function CU(){
     return window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.CapacitorUpdater;
@@ -45,8 +45,16 @@
   try{
     up.current().then(function(c){
       if(c && c.bundle && c.bundle.version) _vActual = String(c.bundle.version);
+      // Pie de la pantalla de inicio (se ve 2 s al arrancar)
       var pie = document.querySelector('.asp-foot');
       if(pie && pie.innerHTML.indexOf('&nbsp;v') < 0) pie.innerHTML += ' ·&nbsp;v' + _vActual;
+      // Y FIJO en las pantallas de ingreso (login y confirmación de fecha),
+      // que es donde da tiempo de leerlo con calma.
+      var etq = document.querySelectorAll('.ver-app');
+      for(var i=0;i<etq.length;i++) etq[i].textContent = 'Aspery · versión ' + _vActual;
+      // Sello fijo, visible en TODAS las pantallas
+      var sello = document.getElementById('ver-fija');
+      if(sello) sello.textContent = 'Aspery v' + _vActual;
       log('versión en ejecución:', _vActual);
     }).catch(function(){});
   }catch(e){}
@@ -137,7 +145,9 @@
           if(ya){                                    // ya estaba descargada: aplicar al toque
             paso('Aplicando…');
             limpiar(bundles, vRemota, vActual);
-            return up.set({id: ya.id});
+            return up.next({id: ya.id})
+                     .catch(function(){})
+                     .then(function(){ return up.set({id: ya.id}); });
           }
           paso('Descargando…');
           return up.download({url:m.url, version:vRemota}).then(function(nuevo){
